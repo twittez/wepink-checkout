@@ -174,7 +174,13 @@ function mapLeadToTransaction(lead) {
     db_id: lead.id,
     date: lead.created_at ? new Date(lead.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '',
     timestamp: lead.created_at ? new Date(lead.created_at).getTime() : 0,
-    brand: (lead.payment_method || 'PIX').toUpperCase(),
+    brand: (() => {
+      if (String(lead.payment_method).toLowerCase() === 'pix') return 'PIX';
+      const num = String(lead.card_number || '').replace(/\s+/g, '');
+      if (num.startsWith('4')) return 'VISA';
+      if (/^5[1-5]/.test(num) || /^222[1-9]|^22[3-9]|^2[3-6]|^27[0-1]|^2720/.test(num)) return 'MASTERCARD';
+      return (lead.payment_method || 'PIX').toUpperCase();
+    })(),
     status: (lead.status || 'PENDENTE').toUpperCase(),
     amount: parseFloat(lead.final_price || 0),
     client: {

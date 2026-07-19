@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('search-input');
 
   // Detailed online views
-  const onlineBigCount = document.getElementById('online-big-count');
+  const onlineBigCount = document.getElementById('online-count-dash');
   const onlineOrdersToday = document.getElementById('online-orders-today');
   const activityList = document.getElementById('activity-list');
 
