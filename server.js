@@ -514,11 +514,15 @@ app.delete('/api/transactions/:id', checkAdminAuth, requireRole(['admin', 'manag
   const username = req.signedCookies.admin_username || 'desconhecido';
   try {
     if (supabase) {
-      const { error } = await supabase
-        .from('leads')
-        .delete()
-        .or(`transaction_id.eq.${id},id.eq.${id}`);
-
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      let error;
+      if (isUuid) {
+        const res = await supabase.from('leads').delete().or(`id.eq.${id},transaction_id.eq.${id}`);
+        error = res.error;
+      } else {
+        const res = await supabase.from('leads').delete().eq('transaction_id', id);
+        error = res.error;
+      }
       if (error) throw error;
     } else {
       const list = readLocalTransactions().filter(t => t.id !== id);
@@ -537,11 +541,15 @@ app.patch('/api/transactions/:id/pay', checkAdminAuth, requireRole(['admin', 'ma
   const username = req.signedCookies.admin_username || 'desconhecido';
   try {
     if (supabase) {
-      const { error } = await supabase
-        .from('leads')
-        .update({ status: 'pago' })
-        .or(`transaction_id.eq.${id},id.eq.${id}`);
-
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      let error;
+      if (isUuid) {
+        const res = await supabase.from('leads').update({ status: 'pago' }).or(`id.eq.${id},transaction_id.eq.${id}`);
+        error = res.error;
+      } else {
+        const res = await supabase.from('leads').update({ status: 'pago' }).eq('transaction_id', id);
+        error = res.error;
+      }
       if (error) throw error;
     } else {
       const list = readLocalTransactions();
@@ -637,11 +645,15 @@ app.post('/api/webhook/winnerpay', async (req, res) => {
   if (status === 'paid') {
     try {
       if (supabase) {
-        const { error } = await supabase
-          .from('leads')
-          .update({ status: 'pago' })
-          .or(`transaction_id.eq.${txId},id.eq.${txId}`);
-        
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(txId);
+        let error;
+        if (isUuid) {
+          const res = await supabase.from('leads').update({ status: 'pago' }).or(`id.eq.${txId},transaction_id.eq.${txId}`);
+          error = res.error;
+        } else {
+          const res = await supabase.from('leads').update({ status: 'pago' }).eq('transaction_id', txId);
+          error = res.error;
+        }
         if (error) throw error;
         console.log(`[Webhook Winnerpay] Transação ${txId} marcada como PAGO no Supabase ✓`);
       } else {
