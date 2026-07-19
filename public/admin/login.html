@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login Painel | TwitteZ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg-deep: #050508;
+      --bg-card: #0a0a0f;
+      --primary: #a855f7;
+      --primary-glow: rgba(168, 85, 247, 0.4);
+      --accent-pink: #ec4899;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --border-subtle: rgba(255, 255, 255, 0.05);
+      --border-glow: rgba(139, 92, 246, 0.2);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-deep);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Background glow effect */
+    body::before {
+      content: '';
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.08) 0%, transparent 70%);
+      top: -100px;
+      left: -100px;
+      pointer-events: none;
+    }
+
+    body::after {
+      content: '';
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(236, 72, 153, 0.05) 0%, transparent 70%);
+      bottom: -150px;
+      right: -100px;
+      pointer-events: none;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+      z-index: 10;
+    }
+
+    .login-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-glow);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), inset 0 0 15px rgba(168, 85, 247, 0.03);
+      border-radius: 24px;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .login-header {
+      margin-bottom: 30px;
+    }
+
+    .logo {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .logo-w {
+      color: var(--primary);
+      text-shadow: 0 0 12px var(--primary-glow);
+    }
+
+    .admin-badge {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      opacity: 0.6;
+    }
+
+    .form-group-admin {
+      margin-bottom: 20px;
+      text-align: left;
+    }
+
+    .form-group-admin label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-wrapper-admin {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-wrapper-admin i {
+      position: absolute;
+      left: 16px;
+      color: var(--text-muted);
+      font-size: 16px;
+    }
+
+    .input-wrapper-admin input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 14px 16px 14px 44px;
+      color: #fff;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .input-wrapper-admin input:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: rgba(255, 255, 255, 0.04);
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.15);
+    }
+
+    .error-banner {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+      text-align: left;
+      animation: shake 0.3s ease-in-out;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .btn-login {
+      width: 100%;
+      background: linear-gradient(135deg, var(--primary), var(--accent-pink));
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-login:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(168, 85, 247, 0.45);
+    }
+
+    .btn-login:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-login:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="logo">
+          <span class="logo-w">t</span><span>witteZ</span>
+        </div>
+        <p class="admin-badge">Painel de Controle</p>
+      </div>
+
+      <form id="login-form">
+        <div class="form-group-admin">
+          <label for="username">Usuário</label>
+          <div class="input-wrapper-admin">
+            <i class="fa-regular fa-user"></i>
+            <input type="text" id="username" placeholder="Digite seu usuário" required autocomplete="username">
+          </div>
+        </div>
+
+        <div class="form-group-admin">
+          <label for="password">Senha</label>
+          <div class="input-wrapper-admin">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="password" placeholder="Digite sua senha" required autocomplete="current-password">
+          </div>
+        </div>
+
+        <div id="error-message" class="error-banner hidden">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <span id="error-text">Usuário ou senha incorretos.</span>
+        </div>
+
+        <button type="submit" class="btn-login" id="btn-login">
+          <span class="btn-text">Entrar no Painel</span>
+          <span class="spinner hidden"><i class="fa-solid fa-circle-notch fa-spin"></i> Entrando...</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check auth status on load
+      fetch('/api/auth/status')
+        .then(res => res.json())
+        .then(data => {
+          if (data.authenticated) {
+            window.location.href = 'index.html';
+          }
+        })
+        .catch(err => console.log('Sem sessão ativa.'));
+
+      const form = document.getElementById('login-form');
+      const errorBanner = document.getElementById('error-message');
+      const errorText = document.getElementById('error-text');
+      const btnLogin = document.getElementById('btn-login');
+      const spinner = btnLogin.querySelector('.spinner');
+      const btnText = btnLogin.querySelector('.btn-text');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorBanner.classList.add('hidden');
+        
+        btnText.classList.add('hidden');
+        spinner.classList.remove('hidden');
+        btnLogin.disabled = true;
+
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+
+        try {
+          const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            window.location.href = 'index.html';
+          } else {
+            errorText.textContent = data.message || 'Usuário ou senha incorretos.';
+            errorBanner.classList.remove('hidden');
+          }
+        } catch (err) {
+          errorText.textContent = 'Erro ao se conectar ao servidor.';
+          errorBanner.classList.remove('hidden');
+        } finally {
+          btnText.classList.remove('hidden');
+          spinner.classList.add('hidden');
+          btnLogin.disabled = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "wepink-checkout",
+  "version": "1.0.0",
+  "description": "Checkout and Admin Panel with Wepink design",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.7",
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2"
+  }
+}

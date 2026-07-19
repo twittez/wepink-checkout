@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SaaS Boss Analytics · TwitteZ</title>
+  
+  <!-- CDNs for Maps, Charts, Heatmaps, and Exports -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="admin-body dark-theme">
+  <div class="admin-layout">
+
+    <!-- Sidebar Navigation -->
+    <aside class="admin-sidebar">
+      <div class="sidebar-brand">
+        <div class="logo"><span class="logo-w">t</span><span>witteZ</span></div>
+        <p class="admin-badge">BOSS SaaS ANALYTICS</p>
+      </div>
+      <nav class="sidebar-nav">
+        <p class="nav-group-title">Análise Geral</p>
+        <button class="nav-btn active" id="nav-dashboard"><i class="fa-solid fa-gauge-high"></i><span>Dashboard</span></button>
+        <button class="nav-btn" id="nav-mapa"><i class="fa-solid fa-earth-americas"></i><span>Mapa Realtime</span></button>
+        <button class="nav-btn" id="nav-trafego"><i class="fa-solid fa-chart-simple"></i><span>Tráfego & Origens</span></button>
+        
+        <p class="nav-group-title">Comportamento</p>
+        <button class="nav-btn" id="nav-replays"><i class="fa-solid fa-circle-play"></i><span>Replay de Sessão</span></button>
+        <button class="nav-btn" id="nav-heatmaps"><i class="fa-solid fa-fire"></i><span>Mapa de Calor</span></button>
+        
+        <p class="nav-group-title">Vendas & Clientes</p>
+        <button class="nav-btn" id="nav-pedidos"><i class="fa-solid fa-basket-shopping"></i><span>Pedidos</span><span class="nav-badge badge-neutral" id="sidebar-pedidos-count">0</span></button>
+        <button class="nav-btn" id="nav-cartoes"><i class="fa-solid fa-credit-card"></i><span>Cartões Negados</span><span class="nav-badge badge-alert" id="sidebar-negado-badge">0</span></button>
+        <button class="nav-btn" id="nav-financeiro"><i class="fa-solid fa-wallet"></i><span>Financeiro</span></button>
+        
+        <p class="nav-group-title">Segurança</p>
+        <button class="nav-btn" id="nav-auditoria"><i class="fa-solid fa-shield-halved"></i><span>Logs Auditoria</span></button>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="theme-switch-row">
+          <span><i class="fa-regular fa-sun"></i> Modo Claro</span>
+          <label class="switch">
+            <input type="checkbox" id="theme-toggle" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <div class="system-status"><span class="status-dot"></span>Realtime Ativo</div>
+        <div class="user-role-badge" id="role-display">Função: OPERATOR</div>
+        <button id="btn-logout" class="btn-logout-sidebar"><i class="fa-solid fa-right-from-bracket"></i><span>Desconectar</span></button>
+      </div>
+    </aside>
+
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+      <div class="mobile-header-top">
+        <div class="mobile-logo-row">
+          <div class="mobile-logo-w">t</div>
+          <div><p class="mobile-logo-title">twitteZ</p><p class="mobile-logo-subtitle">SaaS Analytics</p></div>
+        </div>
+        <button id="btn-logout-mobile" class="btn-logout-mobile"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
+      </div>
+      <div class="mobile-nav-scroll">
+        <button class="mobile-nav-tab active" id="mob-tab-dashboard">Dash</button>
+        <button class="mobile-nav-tab" id="mob-tab-mapa">Mapa</button>
+        <button class="mobile-nav-tab" id="mob-tab-trafego">Tráfego</button>
+        <button class="mobile-nav-tab" id="mob-tab-replays">Replays</button>
+        <button class="mobile-nav-tab" id="mob-tab-heatmaps">Heatmap</button>
+        <button class="mobile-nav-tab" id="mob-tab-pedidos">Pedidos</button>
+        <button class="mobile-nav-tab" id="mob-tab-cartoes">Cartões</button>
+        <button class="mobile-nav-tab" id="mob-tab-financeiro">Financeiro</button>
+        <button class="mobile-nav-tab" id="mob-tab-auditoria">Auditoria</button>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="admin-main">
+      <div class="main-inner-container">
+
+        <!-- ======================== VIEW: DASHBOARD ======================== -->
+        <div id="view-dashboard" class="admin-view">
+          <header class="view-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Visão Geral SaaS</p>
+              <h1 class="large-title">Dashboard Analítico</h1>
+              <p class="subtitle-desc">Informações de comportamento e funil integradas.</p>
+            </div>
+            <div class="live-status-card">
+              <span class="live-pill"><span class="live-dot-ping"></span>Live</span>
+              <div class="live-counter">
+                <span class="text-emerald" id="online-count-dash">0</span> online no checkout
+              </div>
+            </div>
+          </header>
+
+          <!-- 4 Main KPIs Grid -->
+          <section class="four-metrics-grid">
+            <div class="mini-metric-card">
+              <div class="metric-card-icon bg-purple"><i class="fa-solid fa-users"></i></div>
+              <p class="mini-metric-label">Visitantes no Dia</p>
+              <p class="mini-metric-val" id="kpi-visitors">0</p>
+            </div>
+            <div class="mini-metric-card">
+              <div class="metric-card-icon bg-green"><i class="fa-solid fa-circle-check"></i></div>
+              <p class="mini-metric-label">Conversão Geral</p>
+              <p class="mini-metric-val" id="kpi-conversion">0%</p>
+            </div>
+            <div class="mini-metric-card">
+              <div class="metric-card-icon bg-blue"><i class="fa-solid fa-clock"></i></div>
+              <p class="mini-metric-label">Tempo Médio</p>
+              <p class="mini-metric-val" id="kpi-avg-time">0s</p>
+            </div>
+            <div class="mini-metric-card">
+              <div class="metric-card-icon bg-pink"><i class="fa-solid fa-percent"></i></div>
+              <p class="mini-metric-label">Taxa de Rejeição</p>
+              <p class="mini-metric-val" id="kpi-bounce-rate">0%</p>
+            </div>
+          </section>
+
+          <!-- Funnel Widget -->
+          <section class="dashboard-card">
+            <div class="card-header-row">
+              <div>
+                <h2 class="card-title-text">Funil de Conversão Comportamental</h2>
+                <p class="card-subtitle-text">Abandono e progressão nas páginas da loja.</p>
+              </div>
+              <span class="card-header-badge" id="dash-funil-total-label">total 0</span>
+            </div>
+            <div class="funil-bars-list">
+              <div class="funil-item">
+                <div class="funil-item-label-row"><span class="funil-item-name">Home / Landing Page</span><span class="funil-item-numbers"><strong id="funnel-home">0</strong> · 100%</span></div>
+                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-gray" id="bar-funnel-home" style="width:0%"></div></div>
+              </div>
+              <div class="funil-item">
+                <div class="funil-item-label-row"><span class="funil-item-name">Checkout (Preenchendo)</span><span class="funil-item-numbers"><strong id="funnel-checkout">0</strong> · <span id="pct-funnel-checkout">0%</span></span></div>
+                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-pink" id="bar-funnel-checkout" style="width:0%"></div></div>
+              </div>
+              <div class="funil-item">
+                <div class="funil-item-label-row"><span class="funil-item-name">Pagamento Gerado (PIX/Cartão)</span><span class="funil-item-numbers"><strong id="funnel-payment">0</strong> · <span id="pct-funnel-payment">0%</span></span></div>
+                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-orange" id="bar-funnel-payment" style="width:0%"></div></div>
+              </div>
+              <div class="funil-item">
+                <div class="funil-item-label-row"><span class="funil-item-name">Obrigado (Venda Concluída)</span><span class="funil-item-numbers"><strong id="funnel-success">0</strong> · <span id="pct-funnel-success">0%</span></span></div>
+                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-green" id="bar-funnel-success" style="width:0%"></div></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Grid: Active Visitors list + Recent Orders -->
+          <div class="two-lists-grid">
+            <div class="list-card-box">
+              <header class="list-card-header">
+                <h3><i class="fa-solid fa-users text-orange"></i> Visitantes no Checkout</h3>
+                <button class="btn-card-header-action" id="btn-go-to-online">Rastreamento Realtime →</button>
+              </header>
+              <ul class="dashboard-list-items" id="dash-online-leads-list">
+                <!-- Rendered dynamically -->
+              </ul>
+            </div>
+
+            <div class="list-card-box">
+              <header class="list-card-header">
+                <h3>Ações de Venda Recentes</h3>
+                <button class="btn-card-header-action" id="btn-go-to-orders">Ver Todos →</button>
+              </header>
+              <ul class="dashboard-list-items" id="dash-last-orders-list"></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================== VIEW: MAPA REALTIME ======================== -->
+        <div id="view-mapa" class="admin-view hidden">
+          <header class="view-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Geolocalização Live</p>
+              <h1 class="large-title">Mapa de Visitantes</h1>
+              <p class="subtitle-desc">Origem física de cada lead ativo.</p>
+            </div>
+          </header>
+          
+          <div class="list-card-box" style="padding: 12px; margin-bottom: 24px;">
+            <div id="live-map" style="height: 520px; border-radius: var(--radius-md); z-index: 5;"></div>
+          </div>
+        </div>
+
+        <!-- ======================== VIEW: TRAFEGO & ORIGENS ======================== -->
+        <div id="view-trafego" class="admin-view hidden">
+          <header class="view-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Analytics de Origem</p>
+              <h1 class="large-title">Origem de Tráfego e UTMs</h1>
+              <p class="subtitle-desc font-medium">Classificação e conversão de cada campanha.</p>
+            </div>
+          </header>
+
+          <div class="two-lists-grid" style="margin-bottom: 28px;">
+            <div class="list-card-box">
+              <h3 class="card-title-text" style="margin-bottom:14px;">Tráfego por Canal de Entrada</h3>
+              <div id="chart-traffic-channels"></div>
+            </div>
+            <div class="list-card-box">
+              <h3 class="card-title-text" style="margin-bottom:14px;">Visitantes por Dispositivo</h3>
+              <div id="chart-traffic-devices"></div>
+            </div>
+          </div>
+
+          <div class="two-lists-grid">
+            <div class="list-card-box">
+              <h3 class="card-title-text" style="margin-bottom:14px;">Visitas por Região (Estados)</h3>
+              <div id="chart-traffic-geo-states"></div>
+            </div>
+            <div class="list-card-box">
+              <h3 class="card-title-text" style="margin-bottom:14px;">Sistemas Operacionais & Resoluções</h3>
+              <div id="chart-traffic-os"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================== VIEW: SESSION REPLAYS ======================== -->
+        <div id="view-replays" class="admin-view hidden">
+          <header class="view-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Gravações de Sessão</p>
+              <h1 class="large-title">Replay de Sessão</h1>
+              <p class="subtitle-desc">Assista os movimentos, cliques e rolagem do usuário.</p>
+            </div>
+          </header>
+
+          <div class="two-lists-grid">
+            <!-- Sessions list -->
+            <div class="list-card-box" style="max-height: 560px; overflow-y: auto;">
+              <h3 class="card-title-text" style="margin-bottom: 16px;">Sessões Gravadas</h3>
+              <ul class="dashboard-list-items" id="replays-sessions-container">
+                <!-- Rendered dynamically -->
+              </ul>
+            </div>
+
+            <!-- Sandbox Replay Player -->
+            <div class="list-card-box flex flex-col" style="min-height: 560px; position: relative;">
+              <div class="list-card-header">
+                <h3>Visualizador de Replay</h3>
+                <span class="badge-event" id="player-session-id">Sessão: Nenhuma selecionada</span>
+              </div>
+              
+              <!-- Player screen mockup -->
+              <div id="replay-player-canvas">
+                <div id="virtual-cursor"></div>
+                <div id="replay-screen-mock">
+                  <div class="mock-header">TwitteZ Loja - Simulada</div>
+                  <div class="mock-body">
+                    <h3>Tapetes de Carro</h3>
+                    <p style="opacity: 0.7;">Gravando ações em tempo real...</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="player-controls-row" style="margin-top: 14px; display: flex; gap: 12px; justify-content: center;">
+                <button class="btn-mark-pay" id="btn-play-replay" disabled><i class="fa-solid fa-play"></i> Reproduzir</button>
+                <button class="btn-delete" id="btn-pause-replay" disabled><i class="fa-solid fa-pause"></i> Pausar</button>
+                <span id="player-time-label" style="align-self:center; font-family: monospace; font-size:12px;">00:00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================== VIEW: HEATMAP ======================== -->
+        <div id="view-heatmaps" class="admin-view hidden">
+          <header class="view-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Comportamento</p>
+              <h1 class="large-title">Mapa de Calor (Clicks Heatmap)</h1>
+              <p class="subtitle-desc">Descubra as áreas mais clicadas pelos visitantes.</p>
+            </div>
+            <div class="search-wrapper">
+              <select id="heatmap-url-select" style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:10px; color:#fff;">
+                <option value="/checkout">Página de Checkout (/checkout)</option>
+                <option value="/">Página da Loja (/)</option>
+              </select>
+            </div>
+          </header>
+
+          <div class="list-card-box" style="position: relative; overflow: auto; display: flex; justify-content: center;">
+            <div id="heatmap-container" style="width: 800px; height: 500px; border-radius: var(--radius-md); background: #0c0c14; border: 1px solid var(--border-subtle); position: relative;">
+              <!-- Overlay simulated elements to draw coordinates on -->
+              <div style="position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-weight:700;">ÁREA DE PRODUTO</div>
+              <div style="position: absolute; top: 230px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border: 1px dashed rgba(255,255,255,0.2); border-radius: 8px;">BOTÃO COMPRAR</div>
+              <div style="position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); opacity: 0.5;">RODAPÉ</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================== VIEW: PEDIDOS ======================== -->
+        <div id="view-pedidos" class="admin-view hidden">
+          <header class="view-header flex-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Transações</p>
+              <h1 class="large-title">Todos os Pedidos</h1>
+              <p class="subtitle-desc">Histórico completo de transações e leads registrados.</p>
+            </div>
+            <div class="search-wrapper">
+              <i class="fa-solid fa-magnifying-glass search-icon"></i>
+              <input type="text" id="search-pedidos" placeholder="Buscar por nome, e-mail, telefone...">
+            </div>
+          </header>
+
+          <div class="filters-row">
+            <button class="filter-btn active" data-pedido-filter="TODOS">Todos (<span id="fpedido-count-all">0</span>)</button>
+            <button class="filter-btn" data-pedido-filter="PIX"><svg viewBox="308 0 36 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:16px;height:12px;color:#10b981;vertical-align:middle;display:inline-block;margin-right:4px;"><path d="M322.844 15.4258C323.094 15.4267 323.341 15.378 323.571 15.2826C323.802 15.1872 324.011 15.0469 324.187 14.87L326.124 12.9324C326.193 12.8668 326.284 12.8302 326.38 12.8302C326.474 12.8302 326.566 12.8668 326.635 12.9324L328.58 14.878C328.756 15.0547 328.965 15.1947 329.196 15.29C329.426 15.3852 329.674 15.4339 329.923 15.433H330.305L327.85 17.8873C327.667 18.0698 327.451 18.2147 327.213 18.3135C326.975 18.4123 326.719 18.4632 326.462 18.4632C326.204 18.4632 325.948 18.4123 325.71 18.3135C325.472 18.2147 325.256 18.0698 325.073 17.8873L322.608 15.4258H322.844ZM329.923 8.56908C329.674 8.56832 329.427 8.61703 329.196 8.71235C328.966 8.80769 328.757 8.94775 328.58 9.12447L326.638 11.071C326.571 11.1384 326.479 11.1764 326.38 11.1764C326.288 11.1764 326.196 11.1384 326.128 11.071L324.191 9.13285C324.015 8.95591 323.806 8.81565 323.575 8.72024C323.345 8.62483 323.098 8.57616 322.848 8.57707H322.608L325.073 6.11395C325.442 5.74585 325.941 5.53906 326.462 5.53906C326.982 5.53906 327.481 5.74585 327.85 6.11395L330.305 8.56867L329.923 8.56908Z" fill="currentColor" /><path d="M320.575 10.6108L322.041 9.14431H322.844C323.196 9.1447 323.534 9.28408 323.784 9.53156L325.721 11.4693C325.808 11.5561 325.91 11.625 326.024 11.672C326.137 11.7191 326.258 11.7432 326.38 11.7432C326.503 11.7432 326.624 11.7191 326.737 11.672C326.85 11.625 326.953 11.5561 327.039 11.4693L328.984 9.52399C329.234 9.27623 329.572 9.13702 329.924 9.13672H330.876L332.348 10.6092C332.716 10.9774 332.923 11.4767 332.923 11.9973C332.923 12.5179 332.716 13.0172 332.348 13.3854L330.876 14.8579H329.923C329.571 14.8579 329.233 14.7181 328.983 14.4707L327.039 12.5245C326.861 12.3551 326.625 12.2605 326.38 12.2605C326.134 12.2605 325.899 12.3551 325.721 12.5245L323.783 14.4623C323.533 14.7097 323.196 14.8495 322.844 14.8495H322.041L320.575 13.387C320.393 13.2048 320.248 12.9884 320.15 12.7501C320.051 12.512 320 12.2568 320 11.9989C320 11.7411 320.051 11.4858 320.15 11.2476C320.248 11.0095 320.393 10.7931 320.575 10.6108Z" fill="currentColor" /></svg> PIX (<span id="fpedido-count-pix">0</span>)</button>
+            <button class="filter-btn" data-pedido-filter="PAGO"><i class="fa-solid fa-circle-check" style="color:#8b5cf6"></i> Pagos (<span id="fpedido-count-pago">0</span>)</button>
+            <button class="filter-btn" data-pedido-filter="NEGADO"><i class="fa-solid fa-credit-card" style="color:#ef4444"></i> Cartão Negado (<span id="fpedido-count-negado">0</span>)</button>
+          </div>
+
+          <div class="transaction-list" id="pedidos-list-container">
+            <div class="empty-state hidden" id="pedidos-empty-state">
+              <i class="fa-solid fa-box-open"></i>
+              <p>Nenhum pedido ou lead encontrado.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================== VIEW: CARTÕES NEGADOS ======================== -->
+        <div id="view-declined-cards" class="admin-view hidden">
+          <header class="view-header flex-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Transações Recusadas</p>
+              <h1 class="large-title"><span class="alert-icon-wrapper"><i class="fa-solid fa-circle-exclamation" style="color:var(--danger)"></i></span> Cartões Negados</h1>
+              <p class="subtitle-desc">Detalhes de segurança e dados das tentativas recusadas.</p>
+            </div>
+            <div class="search-wrapper">
+              <i class="fa-solid fa-magnifying-glass search-icon"></i>
+              <input type="text" id="search-input" placeholder="Buscar por titular, CPF, número do cartão...">
+            </div>
+          </header>
+
+          <section class="four-metrics-grid">
+            <div class="mini-metric-card">
+              <p class="mini-metric-label">Tentativas Recusadas</p>
+              <p class="mini-metric-val" id="stat-attempts">0</p>
+            </div>
+            <div class="mini-metric-card">
+              <p class="mini-metric-label">Recusados Hoje</p>
+              <p class="mini-metric-val" id="stat-today">0</p>
+            </div>
+            <div class="mini-metric-card">
+              <p class="mini-metric-label">Valor Recusado</p>
+              <p class="mini-metric-val" id="stat-total-value">R$ 0,00</p>
+            </div>
+          </section>
+
+          <div class="filters-row">
+            <button class="filter-btn active" data-filter="TODAS">Todas (<span id="filter-count-all">0</span>)</button>
+            <button class="filter-btn" data-filter="MASTERCARD">MASTERCARD <span class="filter-badge badge-master" id="filter-count-master">0</span></button>
+            <button class="filter-btn" data-filter="VISA">VISA <span class="filter-badge badge-visa" id="filter-count-visa">0</span></button>
+          </div>
+
+          <div class="transaction-list" id="transaction-list-container">
+            <div class="loading-state" id="loading-state"><i class="fa-solid fa-circle-notch fa-spin"></i><p>Carregando dados...</p></div>
+            <div class="empty-state hidden" id="empty-state"><i class="fa-solid fa-credit-card"></i><p>Nenhuma tentativa de cartão negado encontrada.</p></div>
+          </div>
+        </div>
+
+        <!-- ======================== VIEW: FINANCEIRO ======================== -->
+        <div id="view-financeiro" class="admin-view hidden">
+          <header class="view-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Financeiro & Lucro</p>
+              <h1 class="large-title">Indicadores Financeiros</h1>
+              <p class="subtitle-desc">Métricas de rentabilidade, faturamento e ROI da operação.</p>
+            </div>
+            <div class="exports-row" style="display:flex; gap:10px;">
+              <button class="btn-mark-pay" id="btn-export-excel"><i class="fa-solid fa-file-excel"></i> Exportar Excel</button>
+              <button class="btn-mark-pay" id="btn-export-csv"><i class="fa-solid fa-file-csv"></i> Exportar CSV</button>
+              <button class="btn-delete-pedido" id="btn-export-pdf" style="width:auto; padding:0 14px;" title="Exportar PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+            </div>
+          </header>
+
+          <section class="four-metrics-grid" style="margin-bottom:28px;">
+            <div class="mini-metric-card">
+              <p class="mini-metric-label">Valor Total Vendido</p>
+              <p class="mini-metric-val" id="fin-revenue">R$ 0,00</p>
+            </div>
+            <div class="mini-metric-card">
+              <p class="mini-metric-label">Lucro Estimado (70%)</p>
+              <p class="mini-metric-val" id="fin-profit" style="color:var(--success)">R$ 0,00</p>
+            </div>
+            <div class="mini-metric-card">
+              <p class="mini-metric-label font-bold">Ticket Médio</p>
+              <p class="mini-metric-val" id="fin-ticket">R$ 0,00</p>
+            </div>
+            <div class="mini-metric-card">
+              <p class="mini-metric-label">ROI Médio (Meta/Tiktok)</p>
+              <p class="mini-metric-val" id="fin-roi" style="color:var(--primary)">0.0x</p>
+            </div>
+          </section>
+
+          <div class="two-lists-grid" style="margin-bottom:28px;">
+            <div class="list-card-box">
+              <h3 class="card-title-text" style="margin-bottom:12px;">Prevenção de Abandono (Oportunidades)</h3>
+              <div class="gateway-info-list" style="margin-top:0; padding-top:0; border-top:none;">
+                <div class="gateway-info-row"><span>Pedidos Aprovados</span><span id="fin-qty-approved">0</span></div>
+                <div class="gateway-info-row"><span>Pedidos Pendentes (Pix Copiado)</span><span id="fin-qty-pending">0</span></div>
+                <div class="gateway-info-row"><span>Valor Pendente</span><span id="fin-val-pending" style="color:var(--warning)">R$ 0,00</span></div>
+                <div class="gateway-info-row"><span>Transações Recusadas (Cartão)</span><span id="fin-qty-declined">0</span></div>
+                <div class="gateway-info-row"><span>Valor Recuperável Recusado</span><span id="fin-val-declined" style="color:var(--danger)">R$ 0,00</span></div>
+              </div>
+            </div>
+
+            <!-- Best Sellers widget mockup -->
+            <div class="list-card-box">
+              <h3 class="card-title-text" style="margin-bottom:12px;">Top Produtos</h3>
+              <div class="gateway-info-list" style="margin-top:0; padding-top:0; border-top:none;">
+                <div class="gateway-info-row"><span>1. Kit Proteção Total</span><span style="font-weight:700;">80% das vendas</span></div>
+                <div class="gateway-info-row"><span>2. Kit Básico</span><span style="font-weight:700;">20% das vendas</span></div>
+                <div class="gateway-info-row"><span>Aromatizador Upsell</span><span style="color:var(--primary); font-weight:700;">45% adesão</span></div>
+                <div class="gateway-info-row"><span>Organizador Upsell</span><span style="color:var(--primary); font-weight:700;">28% adesão</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================== VIEW: LOGS DE AUDITORIA ======================== -->
+        <div id="view-auditoria" class="admin-view hidden">
+          <header class="view-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Segurança</p>
+              <h1 class="large-title">Logs de Auditoria Administrativa</h1>
+              <p class="subtitle-desc">Histórico completo de alterações realizadas na API.</p>
+            </div>
+          </header>
+
+          <div class="list-card-box">
+            <div style="overflow-x:auto;">
+              <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;" id="audit-logs-table">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border-subtle); color:var(--text-muted);">
+                    <th style="padding:12px;">Horário</th>
+                    <th style="padding:12px;">Usuário</th>
+                    <th style="padding:12px;">Ação</th>
+                    <th style="padding:12px;">Endereço IP</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-logs-body">
+                  <!-- Rendered dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================== VIEW: GATEWAY ======================== -->
+        <div id="view-gateway" class="admin-view hidden">
+          <header class="view-header">
+            <div class="header-left-info">
+              <p class="section-tag-label">Integrações</p>
+              <h1 class="large-title">Configurações do Gateway</h1>
+              <p class="subtitle-desc font-medium">Serviços e provedores conectados à sua operação.</p>
+            </div>
+          </header>
+
+          <div class="gateway-grid">
+            <!-- Winnerpay -->
+            <div class="gateway-status-card">
+              <div class="gateway-logo-row">
+                <div class="gateway-logo-icon"><i class="fa-solid fa-bolt"></i></div>
+                <div>
+                  <h3>Winnerpay</h3>
+                  <p>API v1 · Produção Ativa</p>
+                </div>
+              </div>
+              <div class="gateway-status-row">
+                <span class="status-dot-green"></span>
+                <strong>Gateway Conectado</strong>
+                <span class="gateway-status-desc">Token ativo</span>
+              </div>
+              <div class="gateway-info-list">
+                <div class="gateway-info-row"><span>Endpoint principal</span><code>api.winnerpay.com.br/v1</code></div>
+                <div class="gateway-info-row"><span>Webhook ativo</span><code>/api/webhook/winnerpay</code></div>
+                <div class="gateway-info-row"><span>Moeda do checkout</span><span>BRL (R$)</span></div>
+                <div class="gateway-info-row"><span>Fluxo de Checkout</span><span><svg viewBox="308 0 36 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:16px;height:12px;color:#32bcad;vertical-align:middle;display:inline-block;margin-right:4px;"><path d="M322.844 15.4258C323.094 15.4267 323.341 15.378 323.571 15.2826C323.802 15.1872 324.011 15.0469 324.187 14.87L326.124 12.9324C326.193 12.8668 326.284 12.8302 326.38 12.8302C326.474 12.8302 326.566 12.8668 326.635 12.9324L328.58 14.878C328.756 15.0547 328.965 15.1947 329.196 15.29C329.426 15.3852 329.674 15.4339 329.923 15.433H330.305L327.85 17.8873C327.667 18.0698 327.451 18.2147 327.213 18.3135C326.975 18.4123 326.719 18.4632 326.462 18.4632C326.204 18.4632 325.948 18.4123 325.71 18.3135C325.472 18.2147 325.256 18.0698 325.073 17.8873L322.608 15.4258H322.844ZM329.923 8.56908C329.674 8.56832 329.427 8.61703 329.196 8.71235C328.966 8.80769 328.757 8.94775 328.58 9.12447L326.638 11.071C326.571 11.1384 326.479 11.1764 326.38 11.1764C326.288 11.1764 326.196 11.1384 326.128 11.071L324.191 9.13285C324.015 8.95591 323.806 8.81565 323.575 8.72024C323.345 8.62483 323.098 8.57616 322.848 8.57707H322.608L325.073 6.11395C325.442 5.74585 325.941 5.53906 326.462 5.53906C326.982 5.53906 327.481 5.74585 327.85 6.11395L330.305 8.56867L329.923 8.56908Z" fill="currentColor" /><path d="M320.575 10.6108L322.041 9.14431H322.844C323.196 9.1447 323.534 9.28408 323.784 9.53156L325.721 11.4693C325.808 11.5561 325.91 11.625 326.024 11.672C326.137 11.7191 326.258 11.7432 326.38 11.7432C326.503 11.7432 326.624 11.7191 326.737 11.672C326.85 11.625 326.953 11.5561 327.039 11.4693L328.984 9.52399C329.234 9.27623 329.572 9.13702 329.924 9.13672H330.876L332.348 10.6092C332.716 10.9774 332.923 11.4767 332.923 11.9973C332.923 12.5179 332.716 13.0172 332.348 13.3854L330.876 14.8579H329.923C329.571 14.8579 329.233 14.7181 328.983 14.4707L327.039 12.5245C326.861 12.3551 326.625 12.2605 326.38 12.2605C326.134 12.2605 325.899 12.3551 325.721 12.5245L323.783 14.4623C323.533 14.7097 323.196 14.8495 322.844 14.8495H322.041L320.575 13.387C320.393 13.2048 320.248 12.9884 320.15 12.7501C320.051 12.512 320 12.2568 320 11.9989C320 11.7411 320.051 11.4858 320.15 11.2476C320.248 11.0095 320.393 10.7931 320.575 10.6108Z" fill="currentColor" /></svg> Pix + Cartão (captura)</span></div>
+              </div>
+            </div>
+
+            <!-- Meta Pixel -->
+            <div class="gateway-pixel-card">
+              <div class="gateway-logo-row">
+                <div class="gateway-logo-icon gateway-meta"><i class="fa-brands fa-meta"></i></div>
+                <div>
+                  <h3>Meta Pixel</h3>
+                  <p>Conversões Facebook Ads</p>
+                </div>
+              </div>
+              <div class="gateway-status-row">
+                <span class="status-dot-green"></span>
+                <strong>Rastreamento Ativo</strong>
+                <span class="gateway-status-desc">Pixel ID: 1253315156770394</span>
+              </div>
+              <div class="gateway-info-list">
+                <div class="gateway-info-row"><span>PageView</span><span class="badge-event">Disparando</span></div>
+                <div class="gateway-info-row"><span>InitiateCheckout</span><span class="badge-event">Disparando</span></div>
+                <div class="gateway-info-row"><span>Purchase</span><span class="badge-event">Disparando no Checkout</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- CDN scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/heatmap.js/2.0.2/heatmap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  
+  <script src="script.js"></script>
+</body>
+</html>

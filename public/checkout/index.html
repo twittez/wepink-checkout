@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout Seguro | TwitteZ</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Facebook Pixel -->
+  <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '1253315156770394');
+    fbq('track', 'PageView');
+  </script>
+  <noscript>
+    <img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=1253315156770394&ev=PageView&noscript=1"/>
+  </noscript>
+  <!-- End Facebook Pixel -->
+</head>
+<body>
+  <header class="checkout-header">
+    <div class="header-container">
+      <div class="logo">
+        <span class="logo-w">t</span><span>witteZ</span>
+      </div>
+      <div class="security-badge">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span>Ambiente 100% Seguro</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="checkout-container">
+    <div class="checkout-grid">
+      <!-- Left side: Form -->
+      <section class="checkout-form-section">
+        <form id="checkout-form" novalidate>
+
+          <!-- Step 1: Dados Pessoais -->
+          <div class="form-card">
+            <div class="card-header">
+              <span class="step-number">1</span>
+              <h2>Dados Pessoais</h2>
+            </div>
+            <div class="card-body">
+              <div class="form-group full-width">
+                <label for="clientName">Nome Completo</label>
+                <div class="input-wrapper">
+                  <i class="fa-regular fa-user input-icon"></i>
+                  <input type="text" id="clientName" name="clientName" placeholder="Ex: Paula Kelli Araújo da Silva" required autocomplete="name">
+                </div>
+                <span class="error-msg">Por favor, insira seu nome completo.</span>
+              </div>
+
+              <div class="form-group full-width">
+                <label for="clientEmail">E-mail</label>
+                <div class="input-wrapper">
+                  <i class="fa-regular fa-envelope input-icon"></i>
+                  <input type="email" id="clientEmail" name="clientEmail" placeholder="Ex: paullasilvah04@gmail.com" required autocomplete="email">
+                </div>
+                <span class="error-msg">Por favor, insira um e-mail válido.</span>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="clientCPF">CPF</label>
+                  <div class="input-wrapper">
+                    <i class="fa-regular fa-id-card input-icon"></i>
+                    <input type="text" id="clientCPF" name="clientCPF" placeholder="000.000.000-00" required maxlength="14">
+                  </div>
+                  <span class="error-msg">CPF inválido.</span>
+                </div>
+                <div class="form-group">
+                  <label for="clientPhone">Celular / WhatsApp</label>
+                  <div class="input-wrapper">
+                    <i class="fa-brands fa-whatsapp input-icon"></i>
+                    <input type="text" id="clientPhone" name="clientPhone" placeholder="(00) 00000-0000" required maxlength="15">
+                  </div>
+                  <span class="error-msg">Celular inválido.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Entrega -->
+          <div class="form-card">
+            <div class="card-header">
+              <span class="step-number">2</span>
+              <h2>Endereço de Entrega</h2>
+            </div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="cep">CEP</label>
+                  <div class="input-wrapper">
+                    <i class="fa-solid fa-map-location-dot input-icon"></i>
+                    <input type="text" id="cep" name="cep" placeholder="00000-000" required maxlength="9">
+                    <button type="button" id="btn-cep" class="btn-secondary-action"><i class="fa-solid fa-magnifying-glass"></i></button>
+                  </div>
+                  <span class="error-msg">CEP não encontrado.</span>
+                </div>
+                <div class="form-group">
+                  <label for="street">Rua / Avenida</label>
+                  <div class="input-wrapper">
+                    <i class="fa-solid fa-location-dot input-icon"></i>
+                    <input type="text" id="street" name="street" placeholder="Rua, Avenida..." required>
+                  </div>
+                  <span class="error-msg">Campo obrigatório.</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group number-group">
+                  <label for="number">Número</label>
+                  <div class="input-wrapper">
+                    <input type="text" id="number" name="number" placeholder="Ex: 157" required>
+                  </div>
+                  <span class="error-msg">Obrigatório.</span>
+                </div>
+                <div class="form-group complement-group">
+                  <label for="complement">Complemento</label>
+                  <div class="input-wrapper">
+                    <input type="text" id="complement" name="complement" placeholder="Ex: Casa, Apto 10">
+                  </div>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="neighborhood">Bairro</label>
+                  <div class="input-wrapper">
+                    <input type="text" id="neighborhood" name="neighborhood" placeholder="Bairro" required>
+                  </div>
+                  <span class="error-msg">Campo obrigatório.</span>
+                </div>
+                <div class="form-group city-group">
+                  <label for="city">Cidade</label>
+                  <div class="input-wrapper">
+                    <input type="text" id="city" name="city" placeholder="Cidade" required>
+                  </div>
+                  <span class="error-msg">Campo obrigatório.</span>
+                </div>
+                <div class="form-group state-group">
+                  <label for="state">UF</label>
+                  <div class="input-wrapper">
+                    <input type="text" id="state" name="state" placeholder="UF" required maxlength="2">
+                  </div>
+                  <span class="error-msg">Obrigatório.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: Pagamento -->
+          <div class="form-card">
+            <div class="card-header">
+              <span class="step-number">3</span>
+              <h2>Forma de Pagamento</h2>
+            </div>
+            <div class="card-body">
+              <div class="payment-tabs">
+                <button type="button" class="payment-tab active" id="tab-pix">
+                  <i class="fa-solid fa-pix text-pix"></i>
+                  <span>Pix (Desconto)</span>
+                </button>
+                <button type="button" class="payment-tab" id="tab-credit-card">
+                  <i class="fa-solid fa-credit-card"></i>
+                  <span>Cartão de Crédito</span>
+                </button>
+              </div>
+
+              <!-- PIX Section -->
+              <div class="pix-form-info" id="pix-section">
+                <div class="pix-instruction-box">
+                  <i class="fa-solid fa-bolt pix-icon-lightning"></i>
+                  <div>
+                    <p class="pix-inst-title">Aprovação imediata!</p>
+                    <p class="pix-inst-desc">O QR Code e o Pix Copia e Cola serão gerados após confirmar o pedido.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Credit Card Section -->
+              <div class="credit-card-form hidden" id="credit-card-section">
+                <div class="card-visual">
+                  <div class="card-visual-front">
+                    <div class="card-brand-logo" id="visual-brand"><i class="fa-solid fa-credit-card"></i></div>
+                    <div class="card-chip"></div>
+                    <div class="card-visual-number" id="visual-number">•••• •••• •••• ••••</div>
+                    <div class="card-info-row">
+                      <div class="card-info-col">
+                        <span class="card-label">TITULAR</span>
+                        <span class="card-val" id="visual-holder">NOME COMPLETO</span>
+                      </div>
+                      <div class="card-info-col">
+                        <span class="card-label">VALIDADE</span>
+                        <span class="card-val" id="visual-expiry">MM/AA</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group full-width">
+                  <label for="cardNumber">Número do Cartão</label>
+                  <div class="input-wrapper">
+                    <i class="fa-regular fa-credit-card input-icon"></i>
+                    <input type="text" id="cardNumber" name="cardNumber" placeholder="0000 0000 0000 0000" required maxlength="19">
+                  </div>
+                  <span class="error-msg">Número de cartão inválido.</span>
+                </div>
+                <div class="form-group full-width">
+                  <label for="cardHolder">Nome no Cartão</label>
+                  <div class="input-wrapper">
+                    <i class="fa-regular fa-user input-icon"></i>
+                    <input type="text" id="cardHolder" name="cardHolder" placeholder="Ex: PAULA K A SILVA" required>
+                  </div>
+                  <span class="error-msg">Por favor, insira o nome impresso no cartão.</span>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="cardExpiry">Validade</label>
+                    <div class="input-wrapper">
+                      <i class="fa-regular fa-calendar input-icon"></i>
+                      <input type="text" id="cardExpiry" name="cardExpiry" placeholder="MM/AA" required maxlength="5">
+                    </div>
+                    <span class="error-msg">Validade inválida.</span>
+                  </div>
+                  <div class="form-group">
+                    <label for="cardCvv">CVV</label>
+                    <div class="input-wrapper">
+                      <i class="fa-solid fa-lock input-icon"></i>
+                      <input type="text" id="cardCvv" name="cardCvv" placeholder="000" required maxlength="4">
+                    </div>
+                    <span class="error-msg">CVV inválido.</span>
+                  </div>
+                </div>
+                <div class="form-group full-width">
+                  <label for="cardInstallments">Parcelas</label>
+                  <div class="input-wrapper">
+                    <i class="fa-solid fa-list-ol input-icon"></i>
+                    <select id="cardInstallments" name="cardInstallments">
+                      <option value="1x de R$ 69,90 sem juros">1x de R$ 69,90 sem juros</option>
+                      <option value="2x de R$ 34,95 sem juros">2x de R$ 34,95 sem juros</option>
+                      <option value="3x de R$ 23,30 sem juros" selected>3x de R$ 23,30 sem juros</option>
+                      <option value="4x de R$ 17,47 sem juros">4x de R$ 17,47 sem juros</option>
+                      <option value="5x de R$ 13,98 sem juros">5x de R$ 13,98 sem juros</option>
+                      <option value="6x de R$ 11,65 sem juros">6x de R$ 11,65 sem juros</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="security-info">
+                <i class="fa-solid fa-lock text-success"></i>
+                <p>Suas informações são transmitidas com criptografia de ponta a ponta.</p>
+              </div>
+
+              <input type="hidden" id="productPrice" name="productPrice" value="69.90">
+              <input type="hidden" id="shippingPrice" name="shippingPrice" value="0.00">
+              <input type="hidden" id="totalPrice" name="totalPrice" value="69.90">
+
+              <button type="submit" class="btn-submit-payment" id="btn-submit">
+                <span class="btn-text"><i class="fa-solid fa-shield-halved"></i> Gerar Código PIX — R$ 69,90</span>
+                <span class="spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Processando...</span>
+              </button>
+
+              <div id="decline-alert" class="decline-alert hidden">
+                <div class="decline-alert-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                <div class="decline-alert-content">
+                  <h3>Pagamento Não Aprovado</h3>
+                  <p id="decline-message">Transação negada.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- Right side: Cart Summary -->
+      <aside class="checkout-summary-section">
+        <div class="summary-card">
+          <h2>Resumo do Pedido</h2>
+          <div class="product-item">
+            <div class="product-img">
+              <div class="twittez-product-placeholder"><i class="fa-solid fa-couch"></i></div>
+            </div>
+            <div class="product-details">
+              <h3>Poltrona Inflável Portátil com Puff</h3>
+              <p class="qty">Qtd: 1</p>
+              <p class="desc">Aveludada + Puff de Pés + Bomba de Ar</p>
+            </div>
+            <div class="product-price">R$ 69,90</div>
+          </div>
+          <hr class="divider">
+          <div class="summary-row"><span>Subtotal</span><span>R$ 69,90</span></div>
+          <div class="summary-row"><span>Frete <span class="frete-badge">GRÁTIS</span></span><span>R$ 0,00</span></div>
+          <hr class="divider">
+          <div class="summary-row total-row">
+            <span>Total</span>
+            <span class="total-amount">R$ 69,90</span>
+          </div>
+          <div class="delivery-estimate">
+            <i class="fa-solid fa-truck"></i>
+            <div>
+              <p class="est-title">Entrega Expressa</p>
+              <p class="est-time">3 a 7 dias úteis</p>
+            </div>
+          </div>
+        </div>
+        <div class="trust-seals">
+          <div class="seal"><i class="fa-solid fa-shield-halved"></i><span>Site Protegido</span></div>
+          <div class="seal"><i class="fa-solid fa-rotate-left"></i><span>Garantia 7 Dias</span></div>
+          <div class="seal"><i class="fa-solid fa-headset"></i><span>Suporte 24/7</span></div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- PIX Modal -->
+  <div id="pix-modal" class="pix-modal-overlay hidden">
+    <div class="pix-modal-content">
+      <header class="pix-modal-header">
+        <div class="pix-modal-logo"><span class="logo-w">t</span><span>witteZ</span></div>
+        <h3>Pedido Reservado! Pague com Pix</h3>
+      </header>
+      <div class="pix-modal-body">
+        <p class="pix-modal-instruction">Escaneie o QR Code ou copie a chave Pix Copia e Cola no app do seu banco.</p>
+        <div class="pix-qrcode-wrapper">
+          <img id="pix-qrcode-img" src="" alt="Pix QR Code">
+        </div>
+        <div class="pix-timer-box">
+          <i class="fa-regular fa-clock"></i>
+          <span>Expira em: <strong id="pix-timer-countdown">10:00</strong></span>
+        </div>
+        <div class="pix-copy-box">
+          <label for="pix-emv-code">Pix Copia e Cola:</label>
+          <div class="pix-input-group">
+            <input type="text" id="pix-emv-code" readonly value="">
+            <button type="button" id="btn-copy-pix" class="btn-copy-action">
+              <i class="fa-regular fa-copy"></i> Copiar
+            </button>
+          </div>
+        </div>
+        <div class="pix-warning-info">
+          <i class="fa-solid fa-circle-info"></i>
+          <p>O processamento é automático. Você receberá confirmação por e-mail após o pagamento.</p>
+        </div>
+        <button type="button" id="btn-close-pix" class="btn-close-modal">Fechar e Voltar</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="checkout-footer">
+    <div class="footer-container">
+      <p>© 2026 TwitteZ Shop. Todos os direitos reservados. CNPJ: 50.124.962/0001-80</p>
+      <p>Termos de Uso | Políticas de Privacidade</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
