@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let devicesChart = null;
   let geoChart = null;
   let osChart = null;
+  let timelineChart = null;
 
   // ===========================================================
   // DOM References & Views Routing
@@ -478,6 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const devices = await devicesRes.json();
       const geo = await geoRes.json();
 
+      renderTimelineChart(traffic.timeline || []);
       renderChannelsChart(traffic.trafficSources);
       renderDevicesChart(devices.devices);
       renderStatesChart(geo.states);
@@ -485,6 +487,43 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.error('Erro ao renderizar gráficos:', e);
     }
+  }
+
+  function renderTimelineChart(timeline = []) {
+    const categories = timeline.map(t => {
+      const parts = t.date.split('-');
+      return parts.length === 3 ? `${parts[2]}/${parts[1]}` : t.date;
+    });
+    const seriesData = timeline.map(t => t.visits);
+
+    if (timelineChart) {
+      timelineChart.updateSeries([{ data: seriesData }]);
+      timelineChart.updateOptions({ xaxis: { categories: categories } });
+      return;
+    }
+
+    const options = {
+      chart: { type: 'area', height: 260, foreColor: '#9ca3af', toolbar: { show: false } },
+      stroke: { curve: 'smooth', width: 2.5 },
+      dataLabels: { enabled: false },
+      fill: {
+        type: 'gradient',
+        gradient: {
+          shadeIntensity: 1,
+          opacityFrom: 0.4,
+          opacityTo: 0.05,
+          stops: [0, 90, 100]
+        }
+      },
+      series: [{ name: 'Acessos', data: seriesData }],
+      xaxis: { categories: categories },
+      theme: { mode: document.body.classList.contains('dark-theme') ? 'dark' : 'light' },
+      colors: ['#10b981'],
+      grid: { borderColor: 'rgba(156, 163, 175, 0.15)', strokeDashArray: 4 }
+    };
+
+    timelineChart = new ApexCharts(document.getElementById('chart-traffic-timeline'), options);
+    timelineChart.render();
   }
 
   function renderChannelsChart(sources = {}) {

@@ -218,7 +218,8 @@ async function getTransactionsList() {
     const { data, error } = await supabase
       .from('leads')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(300000);
 
     if (error) {
       console.error('[Supabase] Erro ao buscar leads:', error.message);
@@ -238,34 +239,47 @@ async function getTransactionsList() {
 app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
   try {
     if (supabase) {
-      const { data: sessions, error } = await supabase
-        .from('visitor_sessions')
-        .select('*');
+        const { data: sessions, error } = await supabase
+          .from('visitor_sessions')
+          .select('created_at, origem_trafego, rejeitado, duracao_segundos')
+          .limit(300000);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      const total = sessions.length;
-      const bounced = sessions.filter(s => s.rejeitado).length;
-      const bounceRate = total > 0 ? parseFloat(((bounced / total) * 100).toFixed(1)) : 0;
-      
-      const totalDur = sessions.reduce((sum, s) => sum + (s.duracao_segundos || 0), 0);
-      const avgDuration = total > 0 ? Math.round(totalDur / total) : 0;
+        const total = sessions.length;
+        const bounced = sessions.filter(s => s.rejeitado).length;
+        const bounceRate = total > 0 ? parseFloat(((bounced / total) * 100).toFixed(1)) : 0;
+        
+        const totalDur = sessions.reduce((sum, s) => sum + (s.duracao_segundos || 0), 0);
+        const avgDuration = total > 0 ? Math.round(totalDur / total) : 0;
 
-      // Group by traffic source
-      const trafficSources = {};
-      sessions.forEach(s => {
-        const src = s.origem_trafego || 'Direto';
-        trafficSources[src] = (trafficSources[src] || 0) + 1;
-      });
+        // Group by traffic source
+        const trafficSources = {};
+        sessions.forEach(s => {
+          const src = s.origem_trafego || 'Direto';
+          trafficSources[src] = (trafficSources[src] || 0) + 1;
+        });
 
-      res.json({
-        totalVisitors: total,
-        bounceRate,
-        avgTimeOnSite: avgDuration,
-        trafficSources,
-        newVisitors: Math.round(total * 0.75), // Simulated ratio
-        returningVisitors: Math.round(total * 0.25)
-      });
+        // Group by day for chronological access trends
+        const dailyVisits = {};
+        sessions.forEach(s => {
+          if (s.created_at) {
+            const dateStr = s.created_at.split('T')[0];
+            dailyVisits[dateStr] = (dailyVisits[dateStr] || 0) + 1;
+          }
+        });
+        const sortedDays = Object.keys(dailyVisits).sort();
+        const timeline = sortedDays.map(d => ({ date: d, visits: dailyVisits[d] }));
+
+        res.json({
+          totalVisitors: total,
+          bounceRate,
+          avgTimeOnSite: avgDuration,
+          trafficSources,
+          newVisitors: Math.round(total * 0.75), // Simulated ratio
+          returningVisitors: Math.round(total * 0.25),
+          timeline
+        });
     } else {
       // Mock metrics for local fallback
       res.json({
@@ -292,9 +306,10 @@ app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
 app.get('/api/analytics/geo', checkAdminAuth, async (req, res) => {
   try {
     if (supabase) {
-      const { data: sessions, error } = await supabase
-        .from('visitor_sessions')
-        .select('pais, estado, cidade');
+        const { data: sessions, error } = await supabase
+          .from('visitor_sessions')
+          .select('pais, estado, cidade')
+          .limit(300000);
 
       if (error) throw error;
 
@@ -323,9 +338,10 @@ app.get('/api/analytics/geo', checkAdminAuth, async (req, res) => {
 app.get('/api/analytics/devices', checkAdminAuth, async (req, res) => {
   try {
     if (supabase) {
-      const { data: sessions, error } = await supabase
-        .from('visitor_sessions')
-        .select('dispositivo, navegador, so');
+        const { data: sessions, error } = await supabase
+          .from('visitor_sessions')
+          .select('dispositivo, navegador, so')
+          .limit(300000);
 
       if (error) throw error;
 
