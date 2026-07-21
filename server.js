@@ -215,36 +215,57 @@ function mapLeadToTransaction(lead) {
 
 async function getTransactionsList() {
   if (supabase) {
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(300000);
-
-    if (error) {
+    try {
+      const data = await fetchAllRows('leads', '*', q => q.order('created_at', { ascending: false }));
+      return (data || []).map(mapLeadToTransaction);
+    } catch (error) {
       console.error('[Supabase] Erro ao buscar leads:', error.message);
       return [];
     }
-    return (data || []).map(mapLeadToTransaction);
   } else {
     return readLocalTransactions();
   }
 }
 
+
 // ============================================================
-// Core Analytics APIs (SaaS Metrics)
+// Pagination Helper — Infinite rows (bypasses Supabase 1000 default cap)
 // ============================================================
+async function fetchAllRows(table, selectFields = '*', extraQuery = q => q) {
+  const PAGE = 1000;
+  let allRows = [];
+  let page = 0;
+  let done = false;
+
+  while (!done) {
+    const from = page * PAGE;
+    const to   = from + PAGE - 1;
+
+    let query = supabase.from(table).select(selectFields).range(from, to);
+    query = extraQuery(query);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      done = true;
+    } else {
+      allRows = allRows.concat(data);
+      if (data.length < PAGE) done = true;
+      else page++;
+    }
+  }
+
+  return allRows;
+}
+
+
 
 // 1. Traffic Analytics API
 app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
   try {
     if (supabase) {
-        const { data: sessions, error } = await supabase
-          .from('visitor_sessions')
-          .select('created_at, origem_trafego, rejeitado, duracao_segundos')
-          .limit(300000);
-
-        if (error) throw error;
+      const sessions = await fetchAllRows('visitor_sessions', 'created_at, origem_trafego, rejeitado, duracao_segundos');
 
         const total = sessions.length;
         const bounced = sessions.filter(s => s.rejeitado).length;
@@ -306,12 +327,7 @@ app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
 app.get('/api/analytics/geo', checkAdminAuth, async (req, res) => {
   try {
     if (supabase) {
-        const { data: sessions, error } = await supabase
-          .from('visitor_sessions')
-          .select('pais, estado, cidade')
-          .limit(300000);
-
-      if (error) throw error;
+      const sessions = await fetchAllRows('visitor_sessions', 'pais, estado, cidade');
 
       const states = {};
       const cities = {};
@@ -338,12 +354,7 @@ app.get('/api/analytics/geo', checkAdminAuth, async (req, res) => {
 app.get('/api/analytics/devices', checkAdminAuth, async (req, res) => {
   try {
     if (supabase) {
-        const { data: sessions, error } = await supabase
-          .from('visitor_sessions')
-          .select('dispositivo, navegador, so')
-          .limit(300000);
-
-      if (error) throw error;
+      const sessions = await fetchAllRows('visitor_sessions', 'dispositivo, navegador, so');
 
       const devices = {};
       const browsers = {};
