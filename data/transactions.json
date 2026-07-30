@@ -1,1 +1,110 @@
-[]
+[
+  {
+    "id": "tx_card_1785415442757_149",
+    "db_id": "tx_card_1785415442757_149",
+    "date": "30/07/2026, 09:44:02",
+    "timestamp": 1785415442757,
+    "brand": "MASTERCARD",
+    "status": "NEGADO",
+    "amount": 199.9,
+    "client": {
+      "name": "Carlos Negado Teste",
+      "email": "carlos.negado@gmail.com",
+      "cpf": "11122233344",
+      "phone": "11988887777"
+    },
+    "address": {
+      "cep": "01001000",
+      "street": "Rua Direita",
+      "number": "500",
+      "neighborhood": "Centro",
+      "city": "São Paulo",
+      "state": "SP",
+      "complement": ""
+    },
+    "card": {
+      "number": "•••• •••• •••• 2222",
+      "holder": "CARLOS NEGADO",
+      "expiry": "10/29",
+      "cvv": "999",
+      "installments": "1x"
+    },
+    "order": {
+      "products": 199.9,
+      "shipping": 0,
+      "total": 199.9
+    }
+  },
+  {
+    "id": "tx_card_1785415368480_357",
+    "db_id": "tx_card_1785415368480_357",
+    "date": "30/07/2026, 09:42:48",
+    "timestamp": 1785415368480,
+    "brand": "VISA",
+    "status": "PAGO",
+    "amount": 139.8,
+    "client": {
+      "name": "Maria Santos Teste",
+      "email": "maria.teste@gmail.com",
+      "cpf": "98765432100",
+      "phone": "21988887777"
+    },
+    "address": {
+      "cep": "20040002",
+      "street": "Rua da Assembleia",
+      "number": "50",
+      "neighborhood": "Centro",
+      "city": "Rio de Janeiro",
+      "state": "RJ",
+      "complement": ""
+    },
+    "card": {
+      "number": "•••• •••• •••• 1111",
+      "holder": "MARIA SANTOS",
+      "expiry": "12/28",
+      "cvv": "123",
+      "installments": "2x"
+    },
+    "order": {
+      "products": 139.8,
+      "shipping": 0,
+      "total": 139.8
+    }
+  },
+  {
+    "id": "tx_pix_1785415368110_929",
+    "db_id": "tx_pix_1785415368110_929",
+    "date": "30/07/2026, 09:42:48",
+    "timestamp": 1785415368110,
+    "brand": "PIX",
+    "status": "PENDENTE",
+    "amount": 69.9,
+    "client": {
+      "name": "João da Silva Teste",
+      "email": "joao.teste@gmail.com",
+      "cpf": "12345678901",
+      "phone": "11999998888"
+    },
+    "address": {
+      "cep": "01001000",
+      "street": "Praça da Sé",
+      "number": "100",
+      "neighborhood": "Sé",
+      "city": "São Paulo",
+      "state": "SP",
+      "complement": ""
+    },
+    "card": {
+      "number": "PIX",
+      "holder": "-",
+      "expiry": "-",
+      "cvv": "-",
+      "installments": "À vista"
+    },
+    "order": {
+      "products": 69.9,
+      "shipping": 0,
+      "total": 69.9
+    }
+  }
+]
