@@ -1347,8 +1347,8 @@ document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
   loadData();
 
-  // Polling updates every 8 seconds
+  // Real-time polling updates every 2 seconds
   setInterval(() => {
     loadData();
-  }, 8000);
+  }, 2000);
 });
