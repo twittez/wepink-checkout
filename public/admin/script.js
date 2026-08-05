@@ -219,8 +219,86 @@ document.addEventListener('DOMContentLoaded', () => {
   const currency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   // ===========================================================
-  // 1. Dashboard: Load Real-time Stats & Funnel
+  // 1. Dashboard: Load Real-time Stats & Funnel + Audio Notification
   // ===========================================================
+  let knownOrderIds = null;
+  let soundEnabled = true;
+
+  function playOrderSound() {
+    if (!soundEnabled) return;
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const now = audioCtx.currentTime;
+
+      // Som agradável de caixa registradora / notificação (D5 -> A5)
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, now); // D5
+      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(880, now + 0.15); // A5
+      gain2.gain.setValueAtTime(0.4, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.65);
+    } catch (err) {
+      console.warn('[Som de Notificação] Não foi possível reproduzir:', err);
+    }
+  }
+
+  function checkNewOrdersNotification(newTxList) {
+    if (knownOrderIds === null) {
+      knownOrderIds = new Set(newTxList.map(t => t.id || t.transaction_id));
+      return;
+    }
+
+    const brandNew = newTxList.filter(t => !knownOrderIds.has(t.id || t.transaction_id));
+    if (brandNew.length > 0) {
+      playOrderSound();
+      const firstClient = brandNew[0].client ? brandNew[0].client.name : 'Novo Cliente';
+      showToastNotification(`🎉 Novo pedido recebido! (${firstClient} - ${brandNew[0].brand || 'PIX'})`);
+    }
+
+    knownOrderIds = new Set(newTxList.map(t => t.id || t.transaction_id));
+  }
+
+  function showToastNotification(msg) {
+    const toast = document.createElement('div');
+    toast.style.position = 'fixed';
+    toast.style.top = '20px';
+    toast.style.right = '20px';
+    toast.style.zIndex = '999999';
+    toast.style.background = '#10b981';
+    toast.style.color = '#ffffff';
+    toast.style.padding = '14px 22px';
+    toast.style.borderRadius = '12px';
+    toast.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
+    toast.style.fontWeight = 'bold';
+    toast.style.fontSize = '14px';
+    toast.style.display = 'flex';
+    toast.style.alignItems = 'center';
+    toast.style.gap = '10px';
+    toast.innerHTML = `<i class="fa-solid fa-bell"></i> <span>${msg}</span>`;
+
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(-10px)';
+      setTimeout(() => toast.remove(), 300);
+    }, 4500);
+  }
+
   async function loadData() {
     try {
       const [statsRes, txRes, onlineRes, trafficRes] = await Promise.all([
@@ -239,6 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
       transactions = await txRes.json();
       onlineLeads = await onlineRes.json();
       const traffic = await trafficRes.json();
+
+      checkNewOrdersNotification(transactions);
 
       updateKPIs(traffic, stats);
       updateFunnels(onlineLeads, stats);
@@ -1025,7 +1105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <h4>CLIENTE</h4>
             <p><strong>${tx.client.name}</strong></p>
             <p>${tx.client.email}</p>
-            <p>CPF: ${tx.client.cpf} · Tel: ${tx.client.phone}</p>
+            <p>CPF: ${tx.client.cpf} · Tel: ${tx.client.phone} · <strong style="color:#0284c7;">🌐 IP: ${tx.ip || '127.0.0.1'}</strong></p>
           </div>
           <div class="detail-block">
             <h4>ENDEREÇO</h4>
@@ -1150,7 +1230,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <h4>CLIENTE</h4>
                 <p><strong>${tx.client.name}</strong></p>
                 <p>${tx.client.email}</p>
-                <p>CPF: ${tx.client.cpf} · ${tx.client.phone}</p>
+                <p>CPF: ${tx.client.cpf} · ${tx.client.phone} · <strong style="color:#0284c7;">🌐 IP: ${tx.ip || '127.0.0.1'}</strong></p>
               </div>
               <div class="detail-block">
                 <h4>ENDEREÇO</h4>
@@ -1211,11 +1291,14 @@ document.addEventListener('DOMContentLoaded', () => {
           const isMobile = lead.dispositivo === 'Mobile';
           const devIcon = isMobile ? '📱' : '💻';
           
+          const leadIp = lead.ip || lead.client_ip || '127.0.0.1';
+          const locationStr = lead.cidade ? `${lead.cidade}/${lead.estado || ''} · ` : '';
+
           li.innerHTML = `
             <span class="activity-icon">${devIcon}</span>
             <div class="activity-info">
               <p><strong>${lead.nome || 'Visitante Anônimo'}</strong> (${lead.email || 'Aguardando digitação'})</p>
-              <p class="activity-time">Etapa: <strong style="color:var(--primary);">${lead.status_etapa || 'Loja'}</strong> · IP: ${lead.session_id.substring(5, 14)} · URL: ${lead.url_atual}</p>
+              <p class="activity-time">Etapa: <strong style="color:var(--primary);">${lead.status_etapa || 'Loja'}</strong> · 🌐 <strong style="color:#0284c7;">IP: ${leadIp}</strong> · ${locationStr}URL: ${lead.url_atual}</p>
             </div>
             <span class="activity-amount" style="font-size:11px; color:var(--success); font-weight:700;">Ativo</span>
           `;

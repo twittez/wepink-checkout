@@ -194,9 +194,12 @@ function mapLeadToTransaction(lead) {
   }
 
   return {
-    id: lead.transaction_id || lead.id || `TX_${Date.now()}`,
-    db_id: lead.id,
-    date: lead.created_at ? new Date(lead.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+    id: lead.id || lead.transaction_id || `tx_${Date.now()}`,
+    transaction_id: lead.transaction_id || lead.id || `tx_${Date.now()}`,
+    ip: lead.ip || lead.client_ip || '127.0.0.1',
+    date: lead.created_at
+      ? new Date(lead.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+      : new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
     timestamp: lead.created_at ? new Date(lead.created_at).getTime() : Date.now(),
     brand: brand,
     status: (lead.status || 'PENDENTE').toUpperCase(),
@@ -285,25 +288,35 @@ app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
     if (supabase) {
       const sessions = await fetchAllRows('visitor_sessions', 'created_at, origem_trafego, rejeitado, duracao_segundos');
 
-        const total = sessions.length;
-        const bounced = sessions.filter(s => s.rejeitado).length;
+        const totalAllTime = sessions.length;
+        
+        // Zera os acessos a cada novo dia no horário de São Paulo (America/Sao_Paulo)
+        const todayStrSP = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        const todaySessions = sessions.filter(s => {
+          if (!s.created_at) return false;
+          const sDateSP = new Date(s.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+          return sDateSP === todayStrSP;
+        });
+        
+        const total = todaySessions.length; // Acessos do dia atual (reseta a cada meia-noite SP)
+        const bounced = todaySessions.filter(s => s.rejeitado).length;
         const bounceRate = total > 0 ? parseFloat(((bounced / total) * 100).toFixed(1)) : 0;
         
-        const totalDur = sessions.reduce((sum, s) => sum + (s.duracao_segundos || 0), 0);
+        const totalDur = todaySessions.reduce((sum, s) => sum + (s.duracao_segundos || 0), 0);
         const avgDuration = total > 0 ? Math.round(totalDur / total) : 0;
 
-        // Group by traffic source
+        // Group by traffic source (hoje)
         const trafficSources = {};
-        sessions.forEach(s => {
+        todaySessions.forEach(s => {
           const src = s.origem_trafego || 'Direto';
           trafficSources[src] = (trafficSources[src] || 0) + 1;
         });
 
-        // Group by day for chronological access trends
+        // Group by day for chronological access trends (São Paulo)
         const dailyVisits = {};
         sessions.forEach(s => {
           if (s.created_at) {
-            const dateStr = s.created_at.split('T')[0];
+            const dateStr = new Date(s.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
             dailyVisits[dateStr] = (dailyVisits[dateStr] || 0) + 1;
           }
         });
@@ -312,10 +325,11 @@ app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
 
         res.json({
           totalVisitors: total,
+          totalAllTime: totalAllTime,
           bounceRate,
           avgTimeOnSite: avgDuration,
           trafficSources,
-          newVisitors: Math.round(total * 0.75), // Simulated ratio
+          newVisitors: Math.round(total * 0.75),
           returningVisitors: Math.round(total * 0.25),
           timeline
         });
