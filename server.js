@@ -353,26 +353,16 @@ app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
     if (supabase) {
       const sessions = await fetchAllRows('visitor_sessions', 'created_at, origem_trafego, rejeitado, duracao_segundos');
 
-        const totalAllTime = sessions.length;
-        
-        // Zera os acessos a cada novo dia no horário de São Paulo (America/Sao_Paulo)
-        const todayStrSP = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        const todaySessions = sessions.filter(s => {
-          if (!s.created_at) return false;
-          const sDateSP = new Date(s.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-          return sDateSP === todayStrSP;
-        });
-        
-        const total = todaySessions.length; // Acessos do dia atual (reseta a cada meia-noite SP)
-        const bounced = todaySessions.filter(s => s.rejeitado).length;
+        const total = sessions.length; // Total acumulado de todos os acessos
+        const bounced = sessions.filter(s => s.rejeitado).length;
         const bounceRate = total > 0 ? parseFloat(((bounced / total) * 100).toFixed(1)) : 0;
         
-        const totalDur = todaySessions.reduce((sum, s) => sum + (s.duracao_segundos || 0), 0);
+        const totalDur = sessions.reduce((sum, s) => sum + (s.duracao_segundos || 0), 0);
         const avgDuration = total > 0 ? Math.round(totalDur / total) : 0;
 
-        // Group by traffic source (hoje)
+        // Group by traffic source (todos os acessos)
         const trafficSources = {};
-        todaySessions.forEach(s => {
+        sessions.forEach(s => {
           const src = s.origem_trafego || 'Direto';
           trafficSources[src] = (trafficSources[src] || 0) + 1;
         });
@@ -390,7 +380,7 @@ app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
 
         res.json({
           totalVisitors: total,
-          totalAllTime: totalAllTime,
+          totalAllTime: total,
           bounceRate,
           avgTimeOnSite: avgDuration,
           trafficSources,
