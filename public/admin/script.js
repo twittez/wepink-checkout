@@ -124,21 +124,34 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===========================================================
   async function checkAuth() {
     try {
-      const res = await fetch('/api/auth/status');
-      const data = await res.json();
-      if (!data.authenticated) {
-        window.location.href = 'login.html';
+      // Primeira prioridade: verifica se tem token válido no localStorage
+      const localToken = localStorage.getItem('admin_token');
+      if (localToken === 'twittez_logged_in') {
+        // Token local válido, continua sem precisar do cookie
         return;
       }
-      // Set role display
-      roleDisplay.textContent = `Função: ${data.role.toUpperCase()}`;
-      
-      // Restricted views for Operator
-      if (data.role === 'operator') {
-        if (navBtns.auditoria) navBtns.auditoria.style.display = 'none';
+
+      // Segunda: verifica com o servidor via cookie
+      const res = await fetch('/api/auth/status');
+      const data = await res.json();
+      if (data.authenticated) {
+        // Salva no localStorage para persistir entre reloads
+        localStorage.setItem('admin_token', 'twittez_logged_in');
+        if (roleDisplay) roleDisplay.textContent = `Função: ${data.role.toUpperCase()}`;
+        if (data.role === 'operator') {
+          if (navBtns.auditoria) navBtns.auditoria.style.display = 'none';
+        }
+      } else {
+        // Sem cookie e sem token local: manda para login
+        localStorage.removeItem('admin_token');
+        window.location.href = 'login.html';
       }
     } catch (err) {
-      window.location.href = 'login.html';
+      // Se o servidor não responder mas tiver token local, não redireciona
+      const localToken = localStorage.getItem('admin_token');
+      if (!localToken) {
+        window.location.href = 'login.html';
+      }
     }
   }
 
@@ -299,17 +312,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 4500);
   }
 
-  const getAuthHeaders = () => ({
-    'Authorization': 'Bearer ' + (localStorage.getItem('admin_token') || 'twittez_logged_in'),
-    'x-admin-session': localStorage.getItem('admin_token') || 'twittez_logged_in'
-  });
+  let cachedStats = {};
+  let cachedTraffic = {};
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('admin_token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  };
 
   async function loadData() {
     try {
       const headers = getAuthHeaders();
       const results = await Promise.allSettled([
         fetch('/api/stats', { headers }).then(r => {
-          if (r.status === 401 && !localStorage.getItem('admin_token')) { window.location.href = 'login.html'; return {}; }
+          if (r.status === 401) {
+            localStorage.removeItem('admin_token');
+            window.location.href = 'login.html';
+            return {};
+          }
           return r.ok ? r.json() : {};
         }),
         fetch('/api/transactions', { headers }).then(r => r.ok ? r.json() : []),

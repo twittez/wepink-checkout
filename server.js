@@ -52,32 +52,25 @@ if (supabase) {
 const adminUser = process.env.ADMIN_USER || 'twittez';
 const adminPassword = process.env.ADMIN_PASSWORD || 'Twittez@2003';
 
-const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
-
 const cookieOptions = {
   signed: true,
   httpOnly: true,
   maxAge: 24 * 60 * 60 * 1000,
-  sameSite: 'lax',
-  secure: isProduction
+  sameSite: 'lax'
 };
 
-// Custom Auth middleware (aceita Cookie ou Header Authorization / x-admin-session)
+// Auth middleware — só protege APIs JSON, nunca arquivos HTML estáticos
 const checkAdminAuth = (req, res, next) => {
-  const sessionToken = req.signedCookies.admin_session || req.headers['x-admin-session'];
+  const sessionToken = req.signedCookies.admin_session;
   const authHeader = req.headers['authorization'] || '';
   if (
-    sessionToken === 'twittez_logged_in' || 
-    authHeader === 'Bearer twittez_logged_in' ||
-    authHeader.includes('twittez_logged_in')
+    sessionToken === 'twittez_logged_in' ||
+    authHeader === 'Bearer twittez_logged_in'
   ) {
     next();
   } else {
-    if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
-      res.status(401).json({ error: 'Unauthorized' });
-    } else {
-      res.redirect('/admin/login.html');
-    }
+    // Para APIs retorna 401 JSON; jamais redireciona para evitar loops
+    res.status(401).json({ error: 'Unauthorized', redirect: '/admin/login.html' });
   }
 };
 
@@ -117,19 +110,14 @@ async function logAdminAction(user, action, req) {
 
 // Redirect root to admin dashboard
 app.get('/', (req, res) => {
-  res.redirect('/admin');
+  res.redirect('/admin/index.html');
 });
 
-// Protect Admin index
 app.get('/admin', (req, res) => {
   res.redirect('/admin/index.html');
 });
 
-app.get('/admin/index.html', checkAdminAuth, (req, res, next) => {
-  next();
-});
-
-// Serve admin folder statically
+// Serve admin folder statically (sem proteção no servidor — auth é 100% no frontend)
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 
 // Serve checkout folder statically
