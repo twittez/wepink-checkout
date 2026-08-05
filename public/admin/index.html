@@ -124,28 +124,57 @@
 
           <!-- Funnel Widget -->
           <section class="dashboard-card">
-            <div class="card-header-row">
+            <div class="card-header-row" style="flex-wrap: wrap; gap: 10px;">
               <div>
-                <h2 class="card-title-text">Funil de Conversão Comportamental</h2>
-                <p class="card-subtitle-text">Abandono e progressão nas páginas da loja.</p>
+                <h2 class="card-title-text"><i class="fa-solid fa-filter text-orange"></i> Funil de Conversão & Taxa de Abandono</h2>
+                <p class="card-subtitle-text">Acompanhe a progressão dos leads pelas etapas do checkout em tempo real.</p>
               </div>
-              <span class="card-header-badge" id="dash-funil-total-label">total 0</span>
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); padding: 6px 14px; border-radius: 10px; font-size: 12px; font-weight: 800; color: #ef4444;">
+                  <i class="fa-solid fa-user-minus"></i> Abandono no Checkout: <span id="kpi-abandono-checkout">0%</span>
+                </div>
+                <span class="card-header-badge" id="dash-funil-total-label">total 0</span>
+              </div>
             </div>
-            <div class="funil-bars-list">
+            <div class="funil-bars-list" style="margin-top: 16px;">
+              <!-- Etapa 1: Visita na Loja -->
               <div class="funil-item">
-                <div class="funil-item-label-row"><span class="funil-item-name">Home / Landing Page</span><span class="funil-item-numbers"><strong id="funnel-home">0</strong> · 100%</span></div>
-                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-gray" id="bar-funnel-home" style="width:0%"></div></div>
+                <div class="funil-item-label-row">
+                  <span class="funil-item-name">1. Visita à Loja (Landing Page)</span>
+                  <span class="funil-item-numbers"><strong id="funnel-home">0</strong> · <span id="pct-funnel-home">100%</span></span>
+                </div>
+                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-gray" id="bar-funnel-home" style="width:100%"></div></div>
               </div>
+              <!-- Etapa 2: Selecionou Veículo / Iniciou Checkout -->
               <div class="funil-item">
-                <div class="funil-item-label-row"><span class="funil-item-name">Checkout (Preenchendo)</span><span class="funil-item-numbers"><strong id="funnel-checkout">0</strong> · <span id="pct-funnel-checkout">0%</span></span></div>
+                <div class="funil-item-label-row">
+                  <span class="funil-item-name">2. Selecionou Veículo / Iniciou Checkout</span>
+                  <span class="funil-item-numbers"><strong id="funnel-selected">0</strong> · <span id="pct-funnel-selected">0%</span></span>
+                </div>
+                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-blue" id="bar-funnel-selected" style="width:0%"></div></div>
+              </div>
+              <!-- Etapa 3: Preenchendo Endereço -->
+              <div class="funil-item">
+                <div class="funil-item-label-row">
+                  <span class="funil-item-name">3. Etapa de Endereço (Preenchendo CEP)</span>
+                  <span class="funil-item-numbers"><strong id="funnel-checkout">0</strong> · <span id="pct-funnel-checkout">0%</span></span>
+                </div>
                 <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-pink" id="bar-funnel-checkout" style="width:0%"></div></div>
               </div>
+              <!-- Etapa 4: Etapa de Pagamento -->
               <div class="funil-item">
-                <div class="funil-item-label-row"><span class="funil-item-name">Pagamento Gerado (PIX/Cartão)</span><span class="funil-item-numbers"><strong id="funnel-payment">0</strong> · <span id="pct-funnel-payment">0%</span></span></div>
+                <div class="funil-item-label-row">
+                  <span class="funil-item-name">4. Etapa de Pagamento (PIX / Cartão)</span>
+                  <span class="funil-item-numbers"><strong id="funnel-payment">0</strong> · <span id="pct-funnel-payment">0%</span></span>
+                </div>
                 <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-orange" id="bar-funnel-payment" style="width:0%"></div></div>
               </div>
+              <!-- Etapa 5: Compra Concluída (Página de Obrigado) -->
               <div class="funil-item">
-                <div class="funil-item-label-row"><span class="funil-item-name">Obrigado (Venda Concluída)</span><span class="funil-item-numbers"><strong id="funnel-success">0</strong> · <span id="pct-funnel-success">0%</span></span></div>
+                <div class="funil-item-label-row">
+                  <span class="funil-item-name">5. Compra Concluída (Página de Obrigado)</span>
+                  <span class="funil-item-numbers"><strong id="funnel-success">0</strong> · <span id="pct-funnel-success">0%</span></span>
+                </div>
                 <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-green" id="bar-funnel-success" style="width:0%"></div></div>
               </div>
             </div>

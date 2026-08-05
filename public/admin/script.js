@@ -299,6 +299,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 4500);
   }
 
+  let cachedStats = {};
+  let cachedTraffic = {};
+
   async function loadData() {
     try {
       const [statsRes, txRes, onlineRes, trafficRes] = await Promise.all([
@@ -313,15 +316,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const stats = await statsRes.json();
+      cachedStats = await statsRes.json();
       transactions = await txRes.json();
       onlineLeads = await onlineRes.json();
-      const traffic = await trafficRes.json();
+      cachedTraffic = await trafficRes.json();
 
       checkNewOrdersNotification(transactions);
 
-      updateKPIs(traffic, stats);
-      updateFunnels(onlineLeads, stats);
+      updateKPIs(cachedTraffic, cachedStats);
+      updateFunnels(onlineLeads, cachedStats, cachedTraffic);
       updateSidebar();
       renderDashboardLists();
       renderPedidosList();
@@ -372,30 +375,70 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function updateFunnels(online, stats) {
-    // Stage counts from active online visitors + completed leads stats
-    const totalLeads = stats.totalAttempts || 0;
-    const pendingVal = stats.totalPixCopied || 0;
-    const approvedVal = stats.totalAprovados || 0;
-    const cardVal = stats.totalCardAttempts || 0;
+  function updateFunnels(online, stats, traffic) {
+    const totalVisits = Math.max(traffic?.totalVisitors || 0, online.length, stats?.totalAttempts || 0, 1);
 
-    funnelHome.textContent = totalLeads;
-    barFunnelHome.style.width = totalLeads > 0 ? '100%' : '0%';
+    let selectedVehicleCount = 0;
+    let addressCount = 0;
+    let paymentCount = 0;
+    let successCount = stats?.totalAprovados || 0;
 
-    funnelCheckout.textContent = pendingVal;
-    pctFunnelCheckout.textContent = `${pct(pendingVal, totalLeads)}%`;
-    barFunnelCheckout.style.width = `${pct(pendingVal, totalLeads)}%`;
+    online.forEach(lead => {
+      const stage = (lead.status_etapa || '').toLowerCase();
+      if (stage.includes('selecionou') || stage.includes('iniciou')) selectedVehicleCount++;
+      else if (stage.includes('endereço') || stage.includes('identificação') || stage.includes('checkout')) addressCount++;
+      else if (stage.includes('pagamento') || stage.includes('pix')) paymentCount++;
+      else if (stage.includes('obrigado')) successCount++;
+    });
 
-    funnelPayment.textContent = cardVal;
-    pctFunnelPayment.textContent = `${pct(cardVal, totalLeads)}%`;
-    barFunnelPayment.style.width = `${pct(cardVal, totalLeads)}%`;
+    const totalCheckoutStarted = Math.max(selectedVehicleCount + addressCount + paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
+    const totalAddress = Math.max(addressCount + paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
+    const totalPayment = Math.max(paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
+    const totalSuccess = stats?.totalAprovados || 0;
 
-    funnelSuccess.textContent = approvedVal;
-    pctFunnelSuccess.textContent = `${pct(approvedVal, totalLeads)}%`;
-    barFunnelSuccess.style.width = `${pct(approvedVal, totalLeads)}%`;
+    // Taxa de abandono no checkout
+    const abandonedCount = Math.max(0, totalCheckoutStarted - totalSuccess);
+    const abandonRate = totalCheckoutStarted > 0 ? Math.round((abandonedCount / totalCheckoutStarted) * 100) : 0;
+
+    if (document.getElementById('kpi-abandono-checkout')) {
+      document.getElementById('kpi-abandono-checkout').textContent = `${abandonRate}% (${abandonedCount} abandonos)`;
+    }
+
+    if (funnelHome) {
+      funnelHome.textContent = totalVisits;
+      if (barFunnelHome) barFunnelHome.style.width = '100%';
+    }
+
+    if (document.getElementById('funnel-selected')) {
+      document.getElementById('funnel-selected').textContent = totalCheckoutStarted;
+      const pctSelected = pct(totalCheckoutStarted, totalVisits);
+      if (document.getElementById('pct-funnel-selected')) document.getElementById('pct-funnel-selected').textContent = `${pctSelected}%`;
+      if (document.getElementById('bar-funnel-selected')) document.getElementById('bar-funnel-selected').style.width = `${pctSelected}%`;
+    }
+
+    if (funnelCheckout) {
+      funnelCheckout.textContent = totalAddress;
+      const pctAddr = pct(totalAddress, totalVisits);
+      if (pctFunnelCheckout) pctFunnelCheckout.textContent = `${pctAddr}%`;
+      if (barFunnelCheckout) barFunnelCheckout.style.width = `${pctAddr}%`;
+    }
+
+    if (funnelPayment) {
+      funnelPayment.textContent = totalPayment;
+      const pctPay = pct(totalPayment, totalVisits);
+      if (pctFunnelPayment) pctFunnelPayment.textContent = `${pctPay}%`;
+      if (barFunnelPayment) barFunnelPayment.style.width = `${pctPay}%`;
+    }
+
+    if (funnelSuccess) {
+      funnelSuccess.textContent = totalSuccess;
+      const pctSucc = pct(totalSuccess, totalVisits);
+      if (pctFunnelSuccess) pctFunnelSuccess.textContent = `${pctSucc}%`;
+      if (barFunnelSuccess) barFunnelSuccess.style.width = `${pctSucc}%`;
+    }
 
     if (document.getElementById('dash-funil-total-label')) {
-      document.getElementById('dash-funil-total-label').textContent = `total ${totalLeads}`;
+      document.getElementById('dash-funil-total-label').textContent = `total ${totalVisits} acessos`;
     }
   }
 
