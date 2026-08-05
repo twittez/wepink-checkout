@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+data/transactions.json
+data/audit_logs.json
+*.log
+.DS_Store
+Thumbs.db
