@@ -1014,8 +1014,8 @@ app.post('/api/checkout', async (req, res) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
   console.log(`Admin Dashboard: http://localhost:${PORT}/admin`);
   console.log(`Checkout Page: http://localhost:${PORT}/checkout`);
 });
