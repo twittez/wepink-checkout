@@ -20,8 +20,8 @@ const AUDIT_FILE = path.join(__dirname, 'data', 'audit_logs.json');
   }
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb', type: ['application/json', 'text/plain', '*/*'] }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser('twittez_secret_key_12345'));
 
 // Enable CORS for local testing
@@ -127,10 +127,10 @@ app.get('/checkout', (req, res) => {
 // Auth APIs
 // ============================================================
 
+// Login Route
 app.post('/api/login', async (req, res) => {
   const { username, password, role } = req.body;
   if (username === adminUser && password === adminPassword) {
-    // Assign role. Default to admin if not specified or matching
     const selectedRole = role || 'admin';
     res.cookie('admin_session', 'twittez_logged_in', { signed: true, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });
     res.cookie('admin_role', selectedRole, { signed: true, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });
@@ -166,8 +166,12 @@ app.get('/api/auth/status', (req, res) => {
 // Data Helpers (Fallback mode)
 // ============================================================
 function readLocalTransactions() {
-  const fileData = fs.readFileSync(DATA_FILE, 'utf8');
-  return JSON.parse(fileData);
+  try {
+    const fileData = fs.readFileSync(DATA_FILE, 'utf8');
+    return JSON.parse(fileData || '[]');
+  } catch (e) {
+    return [];
+  }
 }
 
 function writeLocalTransactions(data) {
@@ -235,17 +239,33 @@ function mapLeadToTransaction(lead) {
 }
 
 async function getTransactionsList() {
+  let list = [];
   if (supabase) {
     try {
       const data = await fetchAllRows('leads', '*', q => q.order('created_at', { ascending: false }));
-      return (data || []).map(mapLeadToTransaction);
+      if (Array.isArray(data)) {
+        list = data.map(mapLeadToTransaction);
+      }
     } catch (error) {
       console.error('[Supabase] Erro ao buscar leads:', error.message);
-      return [];
     }
-  } else {
-    return readLocalTransactions();
   }
+
+  // Mescla com transações salvas localmente para garantir vendas pendentes e concluídas 100% visíveis
+  try {
+    const local = readLocalTransactions();
+    if (Array.isArray(local)) {
+      const existingIds = new Set(list.map(t => String(t.id || t.transaction_id)));
+      local.forEach(t => {
+        const idStr = String(t.id || t.transaction_id);
+        if (!existingIds.has(idStr)) {
+          list.push(t);
+        }
+      });
+    }
+  } catch (e) {}
+
+  return list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 }
 
 
