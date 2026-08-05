@@ -20,7 +20,7 @@ const AUDIT_FILE = path.join(__dirname, 'data', 'audit_logs.json');
   }
 });
 
-app.use(express.json({ limit: '10mb', type: ['application/json', 'text/plain', '*/*'] }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser('twittez_secret_key_12345'));
 
@@ -688,7 +688,11 @@ const inMemoryOnlineLeads = new Map();
 
 app.post('/api/tracker/ping', async (req, res) => {
   try {
-    const { session_id, ip, cidade, estado, status_etapa, dispositivo, url_atual, nome, email } = req.body || {};
+    let body = req.body || {};
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch (e) {}
+    }
+    const { session_id, ip, cidade, estado, status_etapa, dispositivo, url_atual, nome, email } = body || {};
     if (!session_id) {
       return res.status(400).json({ error: 'session_id obrigatório' });
     }
