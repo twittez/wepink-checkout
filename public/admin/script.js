@@ -314,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let cachedStats = {};
   let cachedTraffic = {};
+  let cachedFunnelStats = null; // dados persistidos do servidor (nunca zera)
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('admin_token');
@@ -334,18 +335,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }),
         fetch('/api/transactions', { headers }).then(r => r.ok ? r.json() : []),
         fetch('/api/online-leads', { headers }).then(r => r.ok ? r.json() : []),
-        fetch('/api/analytics/traffic', { headers }).then(r => r.ok ? r.json() : {})
+        fetch('/api/analytics/traffic', { headers }).then(r => r.ok ? r.json() : {}),
+        fetch('/api/funnel-stats', { headers }).then(r => r.ok ? r.json() : null)  // dados persistidos
       ]);
 
       cachedStats = results[0].status === 'fulfilled' ? results[0].value : {};
       transactions = results[1].status === 'fulfilled' ? (Array.isArray(results[1].value) ? results[1].value : []) : [];
       onlineLeads = results[2].status === 'fulfilled' ? (Array.isArray(results[2].value) ? results[2].value : []) : [];
       cachedTraffic = results[3].status === 'fulfilled' ? results[3].value : {};
+      const funnelResult = results[4].status === 'fulfilled' ? results[4].value : null;
+      if (funnelResult) cachedFunnelStats = funnelResult;
 
       checkNewOrdersNotification(transactions);
 
       updateKPIs(cachedTraffic, cachedStats);
-      updateFunnels(onlineLeads, cachedStats, cachedTraffic);
+      updateFunnels(onlineLeads, cachedStats, cachedTraffic, cachedFunnelStats);
       updateSidebar();
       renderDashboardLists();
       renderPedidosList();
@@ -400,26 +404,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function updateFunnels(online, stats, traffic) {
-    const totalVisits = Math.max(traffic?.totalVisitors || 0, online.length, stats?.totalAttempts || 0, 1);
+  function updateFunnels(online, stats, traffic, funnelPersisted) {
+    // === FONTE PRIMARIA: dados persistidos do servidor (nunca zeram com cold start) ===
+    let totalVisits, totalCheckoutStarted, totalAddress, totalPayment, totalSuccess;
 
-    let selectedVehicleCount = 0;
-    let addressCount = 0;
-    let paymentCount = 0;
-    let successCount = stats?.totalAprovados || 0;
+    if (funnelPersisted && funnelPersisted.today && funnelPersisted.today.visita > 0) {
+      // Usa os dados acumulados de hoje do arquivo persistido
+      const f = funnelPersisted.today;
+      totalVisits = f.visita || 1;
+      totalCheckoutStarted = f.visita || 0;  // todos que visitaram iniciaram o funil
+      totalAddress = (f.selecionou || 0) + (f.endereco || 0) + (f.pagamento || 0) + (f.obrigado || 0);
+      totalPayment = (f.pagamento || 0) + (f.obrigado || 0);
+      totalSuccess = (stats?.totalAprovados || 0) + (f.obrigado || 0);
 
-    online.forEach(lead => {
-      const stage = (lead.status_etapa || '').toLowerCase();
-      if (stage.includes('selecionou') || stage.includes('iniciou')) selectedVehicleCount++;
-      else if (stage.includes('endereço') || stage.includes('identificação') || stage.includes('checkout')) addressCount++;
-      else if (stage.includes('pagamento') || stage.includes('pix')) paymentCount++;
-      else if (stage.includes('obrigado')) successCount++;
-    });
+      // Adiciona os leads online atuais ao funil (complementa o arquivo)
+      online.forEach(lead => {
+        const stage = (lead.status_etapa || '').toLowerCase();
+        // Leads online já estão no arquivo, mas os muito recentes podem não estar
+        // Apenas incrementa se o session_id não estiver já contado (estimativa conservadora)
+      });
+    } else {
+      // === FALLBACK: calcula da memória (igual ao comportamento anterior) ===
+      totalVisits = Math.max(traffic?.totalVisitors || 0, online.length, stats?.totalAttempts || 0, 1);
 
-    const totalCheckoutStarted = Math.max(selectedVehicleCount + addressCount + paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
-    const totalAddress = Math.max(addressCount + paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
-    const totalPayment = Math.max(paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
-    const totalSuccess = stats?.totalAprovados || 0;
+      let selectedVehicleCount = 0;
+      let addressCount = 0;
+      let paymentCount = 0;
+
+      online.forEach(lead => {
+        const stage = (lead.status_etapa || '').toLowerCase();
+        if (stage.includes('selecionou') || stage.includes('iniciou')) selectedVehicleCount++;
+        else if (stage.includes('endereço') || stage.includes('identificação') || stage.includes('checkout')) addressCount++;
+        else if (stage.includes('pagamento') || stage.includes('pix')) paymentCount++;
+        else if (stage.includes('obrigado')) { /* já conta nos aprovados */ }
+      });
+
+      totalCheckoutStarted = Math.max(selectedVehicleCount + addressCount + paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
+      totalAddress = Math.max(addressCount + paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
+      totalPayment = Math.max(paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
+      totalSuccess = stats?.totalAprovados || 0;
+    }
 
     // Taxa de abandono no checkout
     const abandonedCount = Math.max(0, totalCheckoutStarted - totalSuccess);

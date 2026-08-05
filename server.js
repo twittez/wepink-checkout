@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'data', 'transactions.json');
 const AUDIT_FILE = path.join(__dirname, 'data', 'audit_logs.json');
+const FUNNEL_FILE = path.join(__dirname, 'data', 'funnel_stats.json');
 
 // Ensure local data folders exist (for fallback modes)
 [DATA_FILE, AUDIT_FILE].forEach(file => {
@@ -19,6 +20,17 @@ const AUDIT_FILE = path.join(__dirname, 'data', 'audit_logs.json');
     fs.writeFileSync(file, JSON.stringify([], null, 2));
   }
 });
+
+// Funnel stats persistence: never resets between server restarts
+if (!fs.existsSync(path.dirname(FUNNEL_FILE))) {
+  fs.mkdirSync(path.dirname(FUNNEL_FILE), { recursive: true });
+}
+if (!fs.existsSync(FUNNEL_FILE)) {
+  fs.writeFileSync(FUNNEL_FILE, JSON.stringify({
+    sessions: {},       // { session_id: { etapa, last_seen, data } }
+    dailyCounts: {}     // { 'DD/MM/YYYY': { visita, selecionou, endereco, pagamento, obrigado } }
+  }, null, 2));
+}
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -273,7 +285,37 @@ async function getTransactionsList() {
 
 
 // ============================================================
-// Pagination Helper — Infinite rows (bypasses Supabase 1000 default cap)
+// Funnel Stats Persistence Helpers
+// ============================================================
+function readFunnelStats() {
+  try {
+    const raw = fs.readFileSync(FUNNEL_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed.sessions) parsed.sessions = {};
+    if (!parsed.dailyCounts) parsed.dailyCounts = {};
+    return parsed;
+  } catch (e) {
+    return { sessions: {}, dailyCounts: {} };
+  }
+}
+
+function writeFunnelStats(data) {
+  try {
+    fs.writeFileSync(FUNNEL_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('[Funnel] Erro ao salvar funnel_stats.json:', e.message);
+  }
+}
+
+function normalizarEtapa(etapa) {
+  const e = (etapa || '').toLowerCase();
+  if (e.includes('obrigado') || e.includes('sucesso') || e.includes('concluído')) return 'obrigado';
+  if (e.includes('pagamento') || e.includes('pix') || e.includes('cartão') || e.includes('cartao')) return 'pagamento';
+  if (e.includes('endereço') || e.includes('endereco') || e.includes('cep') || e.includes('identificação')) return 'endereco';
+  if (e.includes('selecionou') || e.includes('iniciou') || e.includes('checkout') || e.includes('veiculo')) return 'selecionou';
+  return 'visita';
+}
+
 // ============================================================
 async function fetchAllRows(table, selectFields = '*', extraQuery = q => q) {
   const PAGE = 1000;
@@ -708,6 +750,10 @@ app.post('/api/tracker/ping', async (req, res) => {
       ? headerIp
       : (ip && ip !== '127.0.0.1' ? ip : null);
 
+    const nowIso = new Date().toISOString();
+    const todaySP = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const etapaNorm = normalizarEtapa(status_etapa);
+
     const leadData = {
       session_id,
       ip: realIp,
@@ -718,10 +764,64 @@ app.post('/api/tracker/ping', async (req, res) => {
       status_etapa: status_etapa || 'Loja',
       dispositivo: dispositivo || 'Desktop',
       url_atual: url_atual || 'https://cartapetes.netlify.app/',
-      last_seen: new Date().toISOString()
+      last_seen: nowIso
     };
 
     inMemoryOnlineLeads.set(session_id, leadData);
+
+    // ======= PERSISTÊNCIA DO FUNIL =======
+    // Garante que os dados do funil NUNCA se percam entre reinicializacoes do servidor
+    try {
+      const funnelData = readFunnelStats();
+      const prev = funnelData.sessions[session_id];
+
+      // Promove a etapa (nunca volta para etapa anterior)
+      const etapasOrdem = ['visita', 'selecionou', 'endereco', 'pagamento', 'obrigado'];
+      const prevEtapa = prev?.etapa || 'visita';
+      const etapaFinal = etapasOrdem.indexOf(etapaNorm) >= etapasOrdem.indexOf(prevEtapa) ? etapaNorm : prevEtapa;
+
+      // Atualiza ou cria sessao
+      funnelData.sessions[session_id] = {
+        etapa: etapaFinal,
+        last_seen: nowIso,
+        data: todaySP,
+        dispositivo: leadData.dispositivo,
+        cidade: leadData.cidade
+      };
+
+      // Recalcula o dailyCounts do dia de hoje do zero a partir das sessoes
+      if (!funnelData.dailyCounts[todaySP]) {
+        funnelData.dailyCounts[todaySP] = { visita: 0, selecionou: 0, endereco: 0, pagamento: 0, obrigado: 0 };
+      }
+
+      // Reconta o dia inteiro a partir das sessoes para garantir consistencia
+      const hoje = {}; 
+      Object.values(funnelData.sessions).forEach(s => {
+        if (s.data === todaySP) {
+          hoje[s.etapa] = (hoje[s.etapa] || 0) + 1;
+        }
+      });
+      funnelData.dailyCounts[todaySP] = {
+        visita: hoje.visita || 0,
+        selecionou: hoje.selecionou || 0,
+        endereco: hoje.endereco || 0,
+        pagamento: hoje.pagamento || 0,
+        obrigado: hoje.obrigado || 0
+      };
+
+      // Limpa sessoes com mais de 30 dias para nao inflar o arquivo
+      const cutoff30d = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      Object.keys(funnelData.sessions).forEach(sid => {
+        if (new Date(funnelData.sessions[sid].last_seen).getTime() < cutoff30d) {
+          delete funnelData.sessions[sid];
+        }
+      });
+
+      writeFunnelStats(funnelData);
+    } catch (funnelErr) {
+      console.error('[Funnel] Erro ao persistir etapa:', funnelErr.message);
+    }
+    // ======= FIM PERSISTÊNCIA =======
 
     if (supabase) {
       supabase.from('online_leads').upsert([leadData], { onConflict: 'session_id' }).then();
@@ -738,6 +838,52 @@ app.post('/api/tracker/ping', async (req, res) => {
     return res.json({ success: true, lead: leadData });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint: retorna estatisticas acumuladas e persistidas do funil (nunca zera)
+app.get('/api/funnel-stats', checkAdminAuth, (req, res) => {
+  try {
+    const funnelData = readFunnelStats();
+    const sessions = Object.values(funnelData.sessions);
+    const todaySP = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+    // Totais acumulados de todos os dias
+    const totalSessions = sessions.length;
+    const byStageCumulative = { visita: 0, selecionou: 0, endereco: 0, pagamento: 0, obrigado: 0 };
+    sessions.forEach(s => {
+      const etapasOrdem = ['visita', 'selecionou', 'endereco', 'pagamento', 'obrigado'];
+      // Uma sessao na etapa X conta como passando por todas as etapas anteriores
+      const idx = etapasOrdem.indexOf(s.etapa);
+      for (let i = 0; i <= idx; i++) {
+        byStageCumulative[etapasOrdem[i]]++;
+      }
+    });
+
+    // Hoje
+    const today = funnelData.dailyCounts[todaySP] || { visita: 0, selecionou: 0, endereco: 0, pagamento: 0, obrigado: 0 };
+    const todaySessions = sessions.filter(s => s.data === todaySP);
+    const todayCumulative = { visita: 0, selecionou: 0, endereco: 0, pagamento: 0, obrigado: 0 };
+    todaySessions.forEach(s => {
+      const etapasOrdem = ['visita', 'selecionou', 'endereco', 'pagamento', 'obrigado'];
+      const idx = etapasOrdem.indexOf(s.etapa);
+      for (let i = 0; i <= idx; i++) {
+        todayCumulative[etapasOrdem[i]]++;
+      }
+    });
+
+    // Historico diario
+    const sortedDates = Object.keys(funnelData.dailyCounts).sort();
+
+    return res.json({
+      today: todayCumulative,
+      cumulative: byStageCumulative,
+      total_sessions: totalSessions,
+      today_sessions: todaySessions.length,
+      history: sortedDates.map(d => ({ date: d, ...funnelData.dailyCounts[d] }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
