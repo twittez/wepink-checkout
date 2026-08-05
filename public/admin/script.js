@@ -304,22 +304,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadData() {
     try {
-      const [statsRes, txRes, onlineRes, trafficRes] = await Promise.all([
-        fetch('/api/stats'),
-        fetch('/api/transactions'),
-        fetch('/api/online-leads'),
-        fetch('/api/analytics/traffic')
+      const results = await Promise.allSettled([
+        fetch('/api/stats').then(r => {
+          if (r.status === 401) { window.location.href = 'login.html'; return {}; }
+          return r.ok ? r.json() : {};
+        }),
+        fetch('/api/transactions').then(r => r.ok ? r.json() : []),
+        fetch('/api/online-leads').then(r => r.ok ? r.json() : []),
+        fetch('/api/analytics/traffic').then(r => r.ok ? r.json() : {})
       ]);
 
-      if (statsRes.status === 401 || txRes.status === 401) {
-        window.location.href = 'login.html';
-        return;
-      }
-
-      cachedStats = await statsRes.json();
-      transactions = await txRes.json();
-      onlineLeads = await onlineRes.json();
-      cachedTraffic = await trafficRes.json();
+      cachedStats = results[0].status === 'fulfilled' ? results[0].value : {};
+      transactions = results[1].status === 'fulfilled' ? (Array.isArray(results[1].value) ? results[1].value : []) : [];
+      onlineLeads = results[2].status === 'fulfilled' ? (Array.isArray(results[2].value) ? results[2].value : []) : [];
+      cachedTraffic = results[3].status === 'fulfilled' ? results[3].value : {};
 
       checkNewOrdersNotification(transactions);
 
@@ -337,6 +335,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       console.error('Erro ao carregar dados do Dashboard:', err);
+    } finally {
+      if (typeof loadingState !== 'undefined' && loadingState) {
+        loadingState.classList.add('hidden');
+      }
     }
   }
 
