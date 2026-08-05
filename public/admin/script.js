@@ -339,10 +339,19 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/funnel-stats', { headers }).then(r => r.ok ? r.json() : null)  // dados persistidos
       ]);
 
-      cachedStats = results[0].status === 'fulfilled' ? results[0].value : {};
-      transactions = results[1].status === 'fulfilled' ? (Array.isArray(results[1].value) ? results[1].value : []) : [];
-      onlineLeads = results[2].status === 'fulfilled' ? (Array.isArray(results[2].value) ? results[2].value : []) : [];
-      cachedTraffic = results[3].status === 'fulfilled' ? results[3].value : {};
+      // Nunca sobrescreve dados válidos com vazios — mantém o último estado conhecido
+      const newStats = results[0].status === 'fulfilled' && results[0].value && Object.keys(results[0].value).length > 0 ? results[0].value : null;
+      if (newStats) cachedStats = newStats;
+
+      const newTx = results[1].status === 'fulfilled' && Array.isArray(results[1].value) ? results[1].value : null;
+      if (newTx !== null && (newTx.length > 0 || transactions.length === 0)) transactions = newTx;
+
+      const newLeads = results[2].status === 'fulfilled' && Array.isArray(results[2].value) ? results[2].value : null;
+      if (newLeads !== null) onlineLeads = newLeads; // leads online sempre atualizados (podem ser [] legitimamente)
+
+      const newTraffic = results[3].status === 'fulfilled' && results[3].value && Object.keys(results[3].value).length > 0 ? results[3].value : null;
+      if (newTraffic) cachedTraffic = newTraffic;
+
       const funnelResult = results[4].status === 'fulfilled' ? results[4].value : null;
       if (funnelResult) cachedFunnelStats = funnelResult;
 
