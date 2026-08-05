@@ -299,19 +299,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 4500);
   }
 
-  let cachedStats = {};
-  let cachedTraffic = {};
+  const getAuthHeaders = () => ({
+    'Authorization': 'Bearer ' + (localStorage.getItem('admin_token') || 'twittez_logged_in'),
+    'x-admin-session': localStorage.getItem('admin_token') || 'twittez_logged_in'
+  });
 
   async function loadData() {
     try {
+      const headers = getAuthHeaders();
       const results = await Promise.allSettled([
-        fetch('/api/stats').then(r => {
-          if (r.status === 401) { window.location.href = 'login.html'; return {}; }
+        fetch('/api/stats', { headers }).then(r => {
+          if (r.status === 401 && !localStorage.getItem('admin_token')) { window.location.href = 'login.html'; return {}; }
           return r.ok ? r.json() : {};
         }),
-        fetch('/api/transactions').then(r => r.ok ? r.json() : []),
-        fetch('/api/online-leads').then(r => r.ok ? r.json() : []),
-        fetch('/api/analytics/traffic').then(r => r.ok ? r.json() : {})
+        fetch('/api/transactions', { headers }).then(r => r.ok ? r.json() : []),
+        fetch('/api/online-leads', { headers }).then(r => r.ok ? r.json() : []),
+        fetch('/api/analytics/traffic', { headers }).then(r => r.ok ? r.json() : {})
       ]);
 
       cachedStats = results[0].status === 'fulfilled' ? results[0].value : {};

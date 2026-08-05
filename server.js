@@ -52,10 +52,25 @@ if (supabase) {
 const adminUser = process.env.ADMIN_USER || 'twittez';
 const adminPassword = process.env.ADMIN_PASSWORD || 'Twittez@2003';
 
-// Custom Auth middleware
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
+
+const cookieOptions = {
+  signed: true,
+  httpOnly: true,
+  maxAge: 24 * 60 * 60 * 1000,
+  sameSite: 'lax',
+  secure: isProduction
+};
+
+// Custom Auth middleware (aceita Cookie ou Header Authorization / x-admin-session)
 const checkAdminAuth = (req, res, next) => {
-  const sessionToken = req.signedCookies.admin_session;
-  if (sessionToken === 'twittez_logged_in') {
+  const sessionToken = req.signedCookies.admin_session || req.headers['x-admin-session'];
+  const authHeader = req.headers['authorization'] || '';
+  if (
+    sessionToken === 'twittez_logged_in' || 
+    authHeader === 'Bearer twittez_logged_in' ||
+    authHeader.includes('twittez_logged_in')
+  ) {
     next();
   } else {
     if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
@@ -132,9 +147,9 @@ app.post('/api/login', async (req, res) => {
   const { username, password, role } = req.body;
   if (username === adminUser && password === adminPassword) {
     const selectedRole = role || 'admin';
-    res.cookie('admin_session', 'twittez_logged_in', { signed: true, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });
-    res.cookie('admin_role', selectedRole, { signed: true, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });
-    res.cookie('admin_username', username, { signed: true, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });
+    res.cookie('admin_session', 'twittez_logged_in', cookieOptions);
+    res.cookie('admin_role', selectedRole, cookieOptions);
+    res.cookie('admin_username', username, cookieOptions);
 
     await logAdminAction(username, `Realizou login como ${selectedRole.toUpperCase()}`, req);
     return res.json({ success: true, role: selectedRole });

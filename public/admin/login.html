@@ -291,6 +291,7 @@
 
           const data = await res.json();
           if (res.ok && data.success) {
+            localStorage.setItem('admin_token', 'twittez_logged_in');
             window.location.href = 'index.html';
           } else {
             errorText.textContent = data.message || 'Usuário ou senha incorretos.';
