@@ -663,27 +663,94 @@ app.get('/api/stats', checkAdminAuth, async (req, res) => {
   }
 });
 
+// Real-time online leads tracker receiver
+const inMemoryOnlineLeads = new Map();
+
+app.post('/api/tracker/ping', async (req, res) => {
+  try {
+    const { session_id, ip, cidade, estado, status_etapa, dispositivo, url_atual, nome, email } = req.body || {};
+    if (!session_id) {
+      return res.status(400).json({ error: 'session_id obrigatório' });
+    }
+
+    const headerIp = req.headers['x-nf-client-connection-ip'] ||
+                     req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                     req.socket?.remoteAddress;
+
+    const realIp = (headerIp && headerIp !== '127.0.0.1' && headerIp !== '::1')
+      ? headerIp
+      : (ip && ip !== '127.0.0.1' ? ip : null);
+
+    const leadData = {
+      session_id,
+      ip: realIp,
+      cidade: cidade || 'São Paulo',
+      estado: estado || 'SP',
+      nome: nome || null,
+      email: email || null,
+      status_etapa: status_etapa || 'Loja',
+      dispositivo: dispositivo || 'Desktop',
+      url_atual: url_atual || 'https://cartapetes.netlify.app/',
+      last_seen: new Date().toISOString()
+    };
+
+    inMemoryOnlineLeads.set(session_id, leadData);
+
+    if (supabase) {
+      supabase.from('online_leads').upsert([leadData], { onConflict: 'session_id' }).then();
+      supabase.from('visitor_sessions').upsert([{
+        session_id,
+        ip: realIp,
+        cidade: leadData.cidade,
+        estado: leadData.estado,
+        dispositivo: leadData.dispositivo,
+        last_active: leadData.last_seen
+      }], { onConflict: 'session_id' }).then();
+    }
+
+    return res.json({ success: true, lead: leadData });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Real-time online leads tracker
 app.get('/api/online-leads', checkAdminAuth, async (req, res) => {
   try {
+    const now = Date.now();
+    const cutoffIso = new Date(now - 60 * 1000).toISOString();
+    const leadsMap = new Map();
+
+    // 1. Fetch from Supabase if available
     if (supabase) {
-      const cutoff = new Date(Date.now() - 30 * 1000).toISOString();
       const { data, error } = await supabase
         .from('online_leads')
         .select('*')
-        .gt('last_seen', cutoff)
+        .gt('last_seen', cutoffIso)
         .order('last_seen', { ascending: false });
 
-      if (error) throw error;
-      return res.json(data || []);
-    } else {
-      const mockOnline = [
-        { session_id: 'mock_1', nome: 'Carlos Silva (Simulado)', email: 'carlos@gmail.com', status_etapa: 'Pagamento', dispositivo: 'Mobile', url_atual: 'https://cartapetes.netlify.app/checkout', last_seen: new Date().toISOString() },
-        { session_id: 'mock_2', nome: 'Mariana Souza (Simulado)', email: 'mariana@hotmail.com', status_etapa: 'Endereço', dispositivo: 'Desktop', url_atual: 'https://cartapetes.netlify.app/checkout', last_seen: new Date().toISOString() },
-        { session_id: 'mock_3', nome: null, email: null, status_etapa: 'Identificação', dispositivo: 'Mobile', url_atual: 'https://cartapetes.netlify.app/', last_seen: new Date().toISOString() }
-      ];
-      return res.json(mockOnline);
+      if (!error && Array.isArray(data)) {
+        data.forEach(lead => leadsMap.set(lead.session_id, lead));
+      }
     }
+
+    // 2. Merge in-memory leads active in last 60 seconds
+    for (const [id, lead] of inMemoryOnlineLeads.entries()) {
+      const lastSeenTime = new Date(lead.last_seen).getTime();
+      if (now - lastSeenTime < 60 * 1000) {
+        if (!leadsMap.has(id)) {
+          leadsMap.set(id, lead);
+        }
+      } else {
+        inMemoryOnlineLeads.delete(id);
+      }
+    }
+
+    const result = Array.from(leadsMap.values()).sort(
+      (a, b) => new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime()
+    );
+
+    return res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao carregar leads online' });
   }
