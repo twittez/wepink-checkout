@@ -1197,7 +1197,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div class="pedido-header-right">
             <span class="price-text">${currency(tx.amount)}</span>
-            ${isPix && isPending ? `<button class="btn-mark-pay" data-id="${tx.id}"><i class="fa-solid fa-check"></i> Marcar Pago</button>` : ''}
+            ${isPending ? `<button class="btn-mark-pay" data-id="${tx.id}"><i class="fa-solid fa-check"></i> Marcar Pago</button>` : ''}
             <button class="btn-delete-pedido" data-id="${tx.id}" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>
           </div>
         </div>
@@ -1226,12 +1226,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const markPayBtn = el.querySelector('.btn-mark-pay');
       if (markPayBtn) {
         markPayBtn.addEventListener('click', async () => {
-          if (!confirm('Marcar este pedido como PAGO no Supabase?')) return;
+          if (!confirm(`Marcar o pedido de "${tx.client.name}" (ID: ${tx.id}) como PAGO?`)) return;
           try {
-            const res = await fetch(`/api/transactions/${tx.id}/pay`, { method: 'PATCH' });
+            const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
+            const res = await fetch(`/api/transactions/${tx.id}/pay`, { method: 'PATCH', headers });
             if (res.status === 403) return alert('Apenas administradores/gerentes podem alterar pagamentos.');
             const data = await res.json();
-            if (data.success) loadData();
+            if (data.success) {
+              loadData();
+            } else {
+              alert(data.error || 'Erro ao alterar status.');
+            }
           } catch (err) {
             console.error(err);
           }

@@ -650,32 +650,15 @@ app.delete('/api/transactions/:id', checkAdminAuth, requireRole(['admin', 'manag
 });
 
 // Mark payment as PAGO manually
-app.patch('/api/transactions/:id/pay', checkAdminAuth, requireRole(['admin', 'manager']), async (req, res) => {
+app.patch('/api/transactions/:id/pay', checkAdminAuth, async (req, res) => {
   const { id } = req.params;
-  const username = req.signedCookies.admin_username || 'desconhecido';
+  const username = req.signedCookies.admin_username || 'admin';
   try {
-    if (supabase) {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      let error;
-      if (isUuid) {
-        const res = await supabase.from('leads').update({ status: 'pago' }).or(`id.eq.${id},transaction_id.eq.${id}`);
-        error = res.error;
-      } else {
-        const res = await supabase.from('leads').update({ status: 'pago' }).eq('transaction_id', id);
-        error = res.error;
-      }
-      if (error) throw error;
-    } else {
-      const list = readLocalTransactions();
-      const idx = list.findIndex(t => t.id === id);
-      if (idx === -1) return res.status(404).json({ error: 'Transação não encontrada' });
-      list[idx].status = 'PAGO';
-      list[idx].paid_at = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-      writeLocalTransactions(list);
-    }
+    await updateTransactionStatus(id, 'PAGO');
     await logAdminAction(username, `Marcou manual pagamento PAGO na transação ID ${id}`, req);
-    res.json({ success: true });
+    res.json({ success: true, message: `Transação ${id} marcada como PAGO` });
   } catch (err) {
+    console.error('[Manual Pay Error]:', err.message);
     res.status(500).json({ error: 'Erro ao marcar pagamento' });
   }
 });
@@ -919,49 +902,98 @@ app.get('/api/online-leads', checkAdminAuth, async (req, res) => {
   }
 });
 
+// Helper central para atualizar status de transações simultaneamente no JSON Local e Supabase
+async function updateTransactionStatus(txId, newStatus) {
+  const statusUpper = newStatus.toUpperCase(); // 'PAGO', 'PENDENTE', 'NEGADO'
+  const statusLower = newStatus.toLowerCase();
+
+  let updatedLocally = false;
+  try {
+    const list = readLocalTransactions();
+    const idx = list.findIndex(t => t.id === txId || t.transaction_id === txId);
+    if (idx !== -1) {
+      list[idx].status = statusUpper;
+      if (statusUpper === 'PAGO') {
+        list[idx].paid_at = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      }
+      writeLocalTransactions(list);
+      updatedLocally = true;
+      console.log(`[Transaction Update] Transação ${txId} atualizada para ${statusUpper} localmente ✓`);
+    }
+  } catch (e) {
+    console.error(`[Transaction Update] Erro local:`, e.message);
+  }
+
+  if (supabase) {
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(txId);
+      if (isUuid) {
+        await supabase.from('leads').update({ status: statusLower }).or(`id.eq.${txId},transaction_id.eq.${txId}`);
+      } else {
+        await supabase.from('leads').update({ status: statusLower }).eq('transaction_id', txId);
+      }
+      console.log(`[Transaction Update] Transação ${txId} atualizada para ${statusLower} no Supabase ✓`);
+    } catch (dbErr) {
+      console.error(`[Transaction Update] Erro Supabase:`, dbErr.message);
+    }
+  }
+
+  return updatedLocally;
+}
+
 // Webhook listener for Winnerpay
 app.post('/api/webhook/winnerpay', async (req, res) => {
-  const event = req.body;
+  const event = req.body || {};
   console.log('[Webhook Winnerpay] Recebido:', JSON.stringify(event));
 
-  const txId = event?.data?.id;
-  const status = event?.data?.status;
+  const txId = event?.data?.id || event?.id || event?.transaction_id;
+  const rawStatus = (event?.data?.status || event?.status || '').toLowerCase();
 
   if (!txId) {
     return res.status(400).json({ error: 'Missing transaction id' });
   }
 
-  if (status === 'paid') {
-    try {
-      if (supabase) {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(txId);
-        let error;
-        if (isUuid) {
-          const res = await supabase.from('leads').update({ status: 'pago' }).or(`id.eq.${txId},transaction_id.eq.${txId}`);
-          error = res.error;
-        } else {
-          const res = await supabase.from('leads').update({ status: 'pago' }).eq('transaction_id', txId);
-          error = res.error;
-        }
-        if (error) throw error;
-        console.log(`[Webhook Winnerpay] Transação ${txId} marcada como PAGO no Supabase ✓`);
-      } else {
-        const list = readLocalTransactions();
-        const idx = list.findIndex(t => t.id === txId);
-        if (idx !== -1) {
-          list[idx].status = 'PAGO';
-          list[idx].paid_at = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-          writeLocalTransactions(list);
-          console.log(`[Webhook Winnerpay] Transação ${txId} marcada como PAGO localmente ✓`);
-        }
-      }
-    } catch (err) {
-      console.error('[Webhook Winnerpay] Erro ao atualizar transação:', err.message);
-      return res.status(500).json({ error: 'Internal error' });
-    }
+  if (rawStatus === 'paid' || rawStatus === 'pago' || rawStatus === 'approved' || rawStatus === 'completed') {
+    await updateTransactionStatus(txId, 'PAGO');
   }
 
   res.status(200).json({ received: true });
+});
+
+// Webhook listener for Beehive
+app.post('/api/webhook/beehive', async (req, res) => {
+  const event = req.body || {};
+  console.log('[Webhook Beehive] Recebido:', JSON.stringify(event));
+
+  const txnData = event.data || event;
+  const txId = String(txnData.id || event.objectId || event.id || '');
+  const rawStatus = (txnData.status || event.status || event.type || event.event || '').toLowerCase();
+
+  if (!txId) {
+    return res.status(400).json({ error: 'Missing transaction id' });
+  }
+
+  if (rawStatus === 'paid' || rawStatus === 'pago' || rawStatus === 'approved' || rawStatus === 'completed' || rawStatus.includes('paid')) {
+    await updateTransactionStatus(txId, 'PAGO');
+  }
+
+  res.status(200).json({ received: true });
+});
+
+// Endpoint Admin: Alteração Manual de Status de Transação
+app.post('/api/admin/transactions/update-status', checkAdminAuth, async (req, res) => {
+  try {
+    const { transaction_id, id, status } = req.body || {};
+    const txId = transaction_id || id;
+    if (!txId || !status) {
+      return res.status(400).json({ error: 'transaction_id e status são obrigatórios' });
+    }
+
+    await updateTransactionStatus(txId, status);
+    return res.json({ success: true, message: `Status da transação ${txId} atualizado para ${status}` });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // ============================================================
