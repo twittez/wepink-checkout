@@ -11,7 +11,7 @@ const DATA_FILE = path.join(__dirname, 'data', 'transactions.json');
 const AUDIT_FILE = path.join(__dirname, 'data', 'audit_logs.json');
 const FUNNEL_FILE = path.join(__dirname, 'data', 'funnel_stats.json');
 
-// Ensure local data folders exist (for fallback modes)
+// Ensure local data folders exist
 [DATA_FILE, AUDIT_FILE].forEach(file => {
   if (!fs.existsSync(path.dirname(file))) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -21,14 +21,13 @@ const FUNNEL_FILE = path.join(__dirname, 'data', 'funnel_stats.json');
   }
 });
 
-// Funnel stats persistence: never resets between server restarts
 if (!fs.existsSync(path.dirname(FUNNEL_FILE))) {
   fs.mkdirSync(path.dirname(FUNNEL_FILE), { recursive: true });
 }
 if (!fs.existsSync(FUNNEL_FILE)) {
   fs.writeFileSync(FUNNEL_FILE, JSON.stringify({
-    sessions: {},       // { session_id: { etapa, last_seen, data } }
-    dailyCounts: {}     // { 'DD/MM/YYYY': { visita, selecionou, endereco, pagamento, obrigado } }
+    sessions: {},
+    dailyCounts: {}
   }, null, 2));
 }
 
@@ -36,7 +35,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser('twittez_secret_key_12345'));
 
-// Enable CORS for local testing
+// Enable CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -48,8 +47,8 @@ app.use((req, res, next) => {
 });
 
 // Initialize Supabase if keys are provided in .env
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('seu-projeto'))
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
@@ -60,7 +59,6 @@ if (supabase) {
   console.warn('[Supabase] Modo fallback local (JSON) ativado.');
 }
 
-// Admin Credentials
 const adminUser = process.env.ADMIN_USER || 'twittez';
 const adminPassword = process.env.ADMIN_PASSWORD || 'Twittez@2003';
 
@@ -71,7 +69,6 @@ const cookieOptions = {
   sameSite: 'lax'
 };
 
-// Auth middleware — só protege APIs JSON, nunca arquivos HTML estáticos
 const checkAdminAuth = (req, res, next) => {
   const sessionToken = req.signedCookies.admin_session;
   const authHeader = req.headers['authorization'] || '';
@@ -81,12 +78,10 @@ const checkAdminAuth = (req, res, next) => {
   ) {
     next();
   } else {
-    // Para APIs retorna 401 JSON; jamais redireciona para evitar loops
     res.status(401).json({ error: 'Unauthorized', redirect: '/admin/login.html' });
   }
 };
 
-// Check for specific roles (Admin/Manager/Operator)
 const requireRole = (allowedRoles) => {
   return (req, res, next) => {
     const role = req.signedCookies.admin_role || 'operator';
@@ -98,7 +93,6 @@ const requireRole = (allowedRoles) => {
   };
 };
 
-// Audit logger helper
 async function logAdminAction(user, action, req) {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
   const timestamp = new Date().toISOString();
@@ -120,7 +114,6 @@ async function logAdminAction(user, action, req) {
   }
 }
 
-// Redirect root to admin dashboard
 app.get('/', (req, res) => {
   res.redirect('/admin/index.html');
 });
@@ -129,20 +122,13 @@ app.get('/admin', (req, res) => {
   res.redirect('/admin/index.html');
 });
 
-// Serve admin folder statically (sem proteção no servidor — auth é 100% no frontend)
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
-
-// Serve checkout folder statically
 app.use('/checkout', express.static(path.join(__dirname, 'public', 'checkout')));
 app.get('/checkout', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'checkout', 'index.html'));
 });
 
-// ============================================================
 // Auth APIs
-// ============================================================
-
-// Login Route
 app.post('/api/login', async (req, res) => {
   const { username, password, role } = req.body;
   if (username === adminUser && password === adminPassword) {
@@ -177,9 +163,7 @@ app.get('/api/auth/status', (req, res) => {
   });
 });
 
-// ============================================================
-// Data Helpers (Fallback mode)
-// ============================================================
+// Data Helpers
 function readLocalTransactions() {
   try {
     const fileData = fs.readFileSync(DATA_FILE, 'utf8');
@@ -266,7 +250,6 @@ async function getTransactionsList() {
     }
   }
 
-  // Mescla com transações salvas localmente para garantir vendas pendentes e concluídas 100% visíveis
   try {
     const local = readLocalTransactions();
     if (Array.isArray(local)) {
@@ -283,40 +266,6 @@ async function getTransactionsList() {
   return list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 }
 
-
-// ============================================================
-// Funnel Stats Persistence Helpers
-// ============================================================
-function readFunnelStats() {
-  try {
-    const raw = fs.readFileSync(FUNNEL_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (!parsed.sessions) parsed.sessions = {};
-    if (!parsed.dailyCounts) parsed.dailyCounts = {};
-    return parsed;
-  } catch (e) {
-    return { sessions: {}, dailyCounts: {} };
-  }
-}
-
-function writeFunnelStats(data) {
-  try {
-    fs.writeFileSync(FUNNEL_FILE, JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error('[Funnel] Erro ao salvar funnel_stats.json:', e.message);
-  }
-}
-
-function normalizarEtapa(etapa) {
-  const e = (etapa || '').toLowerCase();
-  if (e.includes('obrigado') || e.includes('sucesso') || e.includes('concluído')) return 'obrigado';
-  if (e.includes('pagamento') || e.includes('pix') || e.includes('cartão') || e.includes('cartao')) return 'pagamento';
-  if (e.includes('endereço') || e.includes('endereco') || e.includes('cep') || e.includes('identificação')) return 'endereco';
-  if (e.includes('selecionou') || e.includes('iniciou') || e.includes('checkout') || e.includes('veiculo')) return 'selecionou';
-  return 'visita';
-}
-
-// ============================================================
 async function fetchAllRows(table, selectFields = '*', extraQuery = q => q) {
   const PAGE = 1000;
   let allRows = [];
@@ -345,51 +294,44 @@ async function fetchAllRows(table, selectFields = '*', extraQuery = q => q) {
   return allRows;
 }
 
-
-
-// 1. Traffic Analytics API
+// Analytics APIs
 app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
   try {
     if (supabase) {
       const sessions = await fetchAllRows('visitor_sessions', 'created_at, origem_trafego, rejeitado, duracao_segundos');
+      const total = sessions.length;
+      const bounced = sessions.filter(s => s.rejeitado).length;
+      const bounceRate = total > 0 ? parseFloat(((bounced / total) * 100).toFixed(1)) : 0;
+      const totalDur = sessions.reduce((sum, s) => sum + (s.duracao_segundos || 0), 0);
+      const avgDuration = total > 0 ? Math.round(totalDur / total) : 0;
 
-        const total = sessions.length; // Total acumulado de todos os acessos
-        const bounced = sessions.filter(s => s.rejeitado).length;
-        const bounceRate = total > 0 ? parseFloat(((bounced / total) * 100).toFixed(1)) : 0;
-        
-        const totalDur = sessions.reduce((sum, s) => sum + (s.duracao_segundos || 0), 0);
-        const avgDuration = total > 0 ? Math.round(totalDur / total) : 0;
+      const trafficSources = {};
+      sessions.forEach(s => {
+        const src = s.origem_trafego || 'Direto';
+        trafficSources[src] = (trafficSources[src] || 0) + 1;
+      });
 
-        // Group by traffic source (todos os acessos)
-        const trafficSources = {};
-        sessions.forEach(s => {
-          const src = s.origem_trafego || 'Direto';
-          trafficSources[src] = (trafficSources[src] || 0) + 1;
-        });
+      const dailyVisits = {};
+      sessions.forEach(s => {
+        if (s.created_at) {
+          const dateStr = new Date(s.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+          dailyVisits[dateStr] = (dailyVisits[dateStr] || 0) + 1;
+        }
+      });
+      const sortedDays = Object.keys(dailyVisits).sort();
+      const timeline = sortedDays.map(d => ({ date: d, visits: dailyVisits[d] }));
 
-        // Group by day for chronological access trends (São Paulo)
-        const dailyVisits = {};
-        sessions.forEach(s => {
-          if (s.created_at) {
-            const dateStr = new Date(s.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-            dailyVisits[dateStr] = (dailyVisits[dateStr] || 0) + 1;
-          }
-        });
-        const sortedDays = Object.keys(dailyVisits).sort();
-        const timeline = sortedDays.map(d => ({ date: d, visits: dailyVisits[d] }));
-
-        res.json({
-          totalVisitors: total,
-          totalAllTime: total,
-          bounceRate,
-          avgTimeOnSite: avgDuration,
-          trafficSources,
-          newVisitors: Math.round(total * 0.75),
-          returningVisitors: Math.round(total * 0.25),
-          timeline
-        });
+      res.json({
+        totalVisitors: total,
+        totalAllTime: total,
+        bounceRate,
+        avgTimeOnSite: avgDuration,
+        trafficSources,
+        newVisitors: Math.round(total * 0.75),
+        returningVisitors: Math.round(total * 0.25),
+        timeline
+      });
     } else {
-      // Mock metrics for local fallback
       res.json({
         totalVisitors: 842,
         bounceRate: 42.5,
@@ -410,12 +352,10 @@ app.get('/api/analytics/traffic', checkAdminAuth, async (req, res) => {
   }
 });
 
-// 2. Geolocation Analytics API
 app.get('/api/analytics/geo', checkAdminAuth, async (req, res) => {
   try {
     if (supabase) {
       const sessions = await fetchAllRows('visitor_sessions', 'pais, estado, cidade');
-
       const states = {};
       const cities = {};
 
@@ -426,7 +366,6 @@ app.get('/api/analytics/geo', checkAdminAuth, async (req, res) => {
 
       res.json({ states, cities });
     } else {
-      // Mock Geolocation metrics
       res.json({
         states: { 'São Paulo': 342, 'Rio de Janeiro': 204, 'Minas Gerais': 120, 'Rio Grande do Sul': 98, 'Paraná': 78 },
         cities: { 'São Paulo': 280, 'Rio de Janeiro': 180, 'Belo Horizonte': 90, 'Porto Alegre': 70, 'Curitiba': 50 }
@@ -437,36 +376,6 @@ app.get('/api/analytics/geo', checkAdminAuth, async (req, res) => {
   }
 });
 
-// 3. Devices Analytics API
-app.get('/api/analytics/devices', checkAdminAuth, async (req, res) => {
-  try {
-    if (supabase) {
-      const sessions = await fetchAllRows('visitor_sessions', 'dispositivo, navegador, so');
-
-      const devices = {};
-      const browsers = {};
-      const os = {};
-
-      sessions.forEach(s => {
-        if (s.dispositivo) devices[s.dispositivo] = (devices[s.dispositivo] || 0) + 1;
-        if (s.navegador) browsers[s.navegador] = (browsers[s.navegador] || 0) + 1;
-        if (s.so) os[s.so] = (os[s.so] || 0) + 1;
-      });
-
-      res.json({ devices, browsers, os });
-    } else {
-      res.json({
-        devices: { 'Mobile': 620, 'Desktop': 210, 'Tablet': 12 },
-        browsers: { 'Chrome': 510, 'Safari': 230, 'Firefox': 54, 'Edge': 42, 'Opera': 6 },
-        os: { 'Android': 390, 'iOS': 230, 'Windows': 170, 'macOS': 40, 'Linux': 12 }
-      });
-    }
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 4. Financial periods dashboard analytics API
 app.get('/api/analytics/finance', checkAdminAuth, async (req, res) => {
   try {
     const list = await getTransactionsList();
@@ -482,9 +391,8 @@ app.get('/api/analytics/finance', checkAdminAuth, async (req, res) => {
     const declinedList = list.filter(t => t.status === 'NEGADO');
     const totalDeclinedVal = declinedList.reduce((sum, t) => sum + t.amount, 0);
 
-    // Calculate profit (estimated 70% margins)
     const netProfit = totalRevenue * 0.7;
-    const adsCost = totalRevenue * 0.35; // Simulated ads cost (35% target CPA)
+    const adsCost = totalRevenue * 0.35;
     const roi = adsCost > 0 ? parseFloat((totalRevenue / adsCost).toFixed(2)) : 0;
 
     res.json({
@@ -503,116 +411,6 @@ app.get('/api/analytics/finance', checkAdminAuth, async (req, res) => {
   }
 });
 
-// 5. Session Replays Index / Event retriever API
-app.get('/api/replays', checkAdminAuth, async (req, res) => {
-  try {
-    if (supabase) {
-      const { id } = req.query;
-      
-      if (id) {
-        // Fetch detailed events for specific session replay
-        const { data, error } = await supabase
-          .from('session_replays')
-          .select('events, created_at')
-          .eq('session_id', id)
-          .order('created_at', { ascending: true });
-
-        if (error) throw error;
-        // Merge chunks of events
-        const mergedEvents = (data || []).reduce((acc, chunk) => {
-          return acc.concat(chunk.events || []);
-        }, []);
-
-        return res.json(mergedEvents);
-      } else {
-        // List sessions that have recorded actions
-        const { data, error } = await supabase
-          .from('visitor_sessions')
-          .select('session_id, created_at, cidade, estado, dispositivo, navegador, so, origem_trafego, duracao_segundos')
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if (error) throw error;
-        return res.json(data || []);
-      }
-    } else {
-      // Mock replay session list and events
-      const { id } = req.query;
-      if (id) {
-        return res.json([
-          { type: 'move', x: 200, y: 300, time: 100 },
-          { type: 'move', x: 220, y: 310, time: 300 },
-          { type: 'move', x: 340, y: 400, time: 600 },
-          { type: 'click', x: 340, y: 400, path: '/checkout', time: 700 },
-          { type: 'scroll', scrollY: 150, time: 1000 },
-          { type: 'move', x: 400, y: 250, time: 1500 }
-        ]);
-      } else {
-        return res.json([
-          { session_id: 'mock_1', created_at: new Date().toISOString(), cidade: 'Porto Alegre', estado: 'RS', dispositivo: 'Mobile', navegador: 'Safari', so: 'iOS', origem_trafego: 'Instagram', duracao_segundos: 45 },
-          { session_id: 'mock_2', created_at: new Date().toISOString(), cidade: 'São Paulo', estado: 'SP', dispositivo: 'Desktop', navegador: 'Chrome', so: 'Windows', origem_trafego: 'Facebook Ads', duracao_segundos: 120 }
-        ]);
-      }
-    }
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 6. Click Heatmap API
-app.get('/api/heatmaps', checkAdminAuth, async (req, res) => {
-  try {
-    const { page_url } = req.query;
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('heatmap_clicks')
-        .select('x_pct, y_px')
-        .eq('page_url', page_url || '/');
-
-      if (error) throw error;
-      res.json(data || []);
-    } else {
-      // Mock click heatmap coordinates
-      res.json([
-        { x_pct: 50.5, y_px: 240 },
-        { x_pct: 48.2, y_px: 245 },
-        { x_pct: 52.0, y_px: 250 },
-        { x_pct: 12.4, y_px: 12 },
-        { x_pct: 88.5, y_px: 550 },
-        { x_pct: 50.1, y_px: 880 }
-      ]);
-    }
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 7. Audit Log Viewer API
-app.get('/api/audit-logs', checkAdminAuth, requireRole(['admin']), async (req, res) => {
-  try {
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('admin_audit_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      if (error) throw error;
-      res.json(data || []);
-    } else {
-      const logs = JSON.parse(fs.readFileSync(AUDIT_FILE, 'utf8'));
-      res.json(logs);
-    }
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ============================================================
-// Standard Operations API Routes
-// ============================================================
-
-// Fetch transactions
 app.get('/api/transactions', checkAdminAuth, async (req, res) => {
   try {
     const list = await getTransactionsList();
@@ -622,7 +420,6 @@ app.get('/api/transactions', checkAdminAuth, async (req, res) => {
   }
 });
 
-// Delete a transaction
 app.delete('/api/transactions/:id', checkAdminAuth, requireRole(['admin', 'manager']), async (req, res) => {
   const { id } = req.params;
   const username = req.signedCookies.admin_username || 'desconhecido';
@@ -639,7 +436,7 @@ app.delete('/api/transactions/:id', checkAdminAuth, requireRole(['admin', 'manag
       }
       if (error) throw error;
     } else {
-      const list = readLocalTransactions().filter(t => t.id !== id);
+      const list = readLocalTransactions().filter(t => String(t.id || t.transaction_id) !== String(id));
       writeLocalTransactions(list);
     }
     await logAdminAction(username, `Excluiu a transação ID ${id}`, req);
@@ -649,318 +446,29 @@ app.delete('/api/transactions/:id', checkAdminAuth, requireRole(['admin', 'manag
   }
 });
 
-// Mark payment as PAGO manually
-app.patch('/api/transactions/:id/pay', checkAdminAuth, async (req, res) => {
-  const { id } = req.params;
-  const username = req.signedCookies.admin_username || 'admin';
-  try {
-    await updateTransactionStatus(id, 'PAGO');
-    await logAdminAction(username, `Marcou manual pagamento PAGO na transação ID ${id}`, req);
-    res.json({ success: true, message: `Transação ${id} marcada como PAGO` });
-  } catch (err) {
-    console.error('[Manual Pay Error]:', err.message);
-    res.status(500).json({ error: 'Erro ao marcar pagamento' });
-  }
-});
-
-// Real-time stats dashboard calculation API
-app.get('/api/stats', checkAdminAuth, async (req, res) => {
-  try {
-    const list = await getTransactionsList();
-    const totalAttempts = list.length;
-
-    const todayStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    const todayAttempts = list.filter(t => t.date.split(',')[0].trim() === todayStr).length;
-
-    const totalAttemptedValue = list.reduce((sum, t) => sum + t.amount, 0);
-
-    const pixTransactions = list.filter(t => t.brand === 'PIX');
-    const totalPixCopied = pixTransactions.length;
-    const pixPending = pixTransactions.filter(t => t.status === 'PENDENTE');
-    const pixPaid = pixTransactions.filter(t => t.status === 'PAGO');
-    const totalAguardandoPagamento = pixPending.reduce((sum, t) => sum + t.amount, 0);
-
-    const cardTransactions = list.filter(t => t.brand !== 'PIX');
-    const totalCardAttempts = cardTransactions.length;
-
-    const totalAprovados = pixPaid.length;
-    const totalReceita = pixPaid.reduce((sum, t) => sum + t.amount, 0);
-
-    res.json({
-      totalAttempts,
-      todayAttempts,
-      totalAttemptedValue,
-      totalPixCopied,
-      totalAguardandoPagamento,
-      totalCardAttempts,
-      totalAprovados,
-      totalReceita
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao carregar estatísticas' });
-  }
-});
-
-// Real-time online leads tracker receiver
-const inMemoryOnlineLeads = new Map();
-
-app.post('/api/tracker/ping', async (req, res) => {
-  try {
-    let body = req.body || {};
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch (e) {}
-    }
-    const { session_id, ip, cidade, estado, status_etapa, dispositivo, url_atual, nome, email } = body || {};
-    if (!session_id) {
-      return res.status(400).json({ error: 'session_id obrigatório' });
-    }
-
-    const headerIp = req.headers['x-nf-client-connection-ip'] ||
-                     req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                     req.socket?.remoteAddress;
-
-    const realIp = (headerIp && headerIp !== '127.0.0.1' && headerIp !== '::1')
-      ? headerIp
-      : (ip && ip !== '127.0.0.1' ? ip : null);
-
-    const nowIso = new Date().toISOString();
-    const todaySP = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    const etapaNorm = normalizarEtapa(status_etapa);
-
-    const leadData = {
-      session_id,
-      ip: realIp,
-      cidade: cidade || 'São Paulo',
-      estado: estado || 'SP',
-      nome: nome || null,
-      email: email || null,
-      status_etapa: status_etapa || 'Loja',
-      dispositivo: dispositivo || 'Desktop',
-      url_atual: url_atual || 'https://cartapetes.netlify.app/',
-      last_seen: nowIso
-    };
-
-    inMemoryOnlineLeads.set(session_id, leadData);
-
-    // ======= PERSISTÊNCIA DO FUNIL =======
-    // Garante que os dados do funil NUNCA se percam entre reinicializacoes do servidor
-    try {
-      const funnelData = readFunnelStats();
-      const prev = funnelData.sessions[session_id];
-
-      // Promove a etapa (nunca volta para etapa anterior)
-      const etapasOrdem = ['visita', 'selecionou', 'endereco', 'pagamento', 'obrigado'];
-      const prevEtapa = prev?.etapa || 'visita';
-      const etapaFinal = etapasOrdem.indexOf(etapaNorm) >= etapasOrdem.indexOf(prevEtapa) ? etapaNorm : prevEtapa;
-
-      // Atualiza ou cria sessao
-      funnelData.sessions[session_id] = {
-        etapa: etapaFinal,
-        last_seen: nowIso,
-        data: todaySP,
-        dispositivo: leadData.dispositivo,
-        cidade: leadData.cidade
-      };
-
-      // Recalcula o dailyCounts do dia de hoje do zero a partir das sessoes
-      if (!funnelData.dailyCounts[todaySP]) {
-        funnelData.dailyCounts[todaySP] = { visita: 0, selecionou: 0, endereco: 0, pagamento: 0, obrigado: 0 };
-      }
-
-      // Reconta o dia inteiro a partir das sessoes para garantir consistencia
-      const hoje = {}; 
-      Object.values(funnelData.sessions).forEach(s => {
-        if (s.data === todaySP) {
-          hoje[s.etapa] = (hoje[s.etapa] || 0) + 1;
-        }
-      });
-      funnelData.dailyCounts[todaySP] = {
-        visita: hoje.visita || 0,
-        selecionou: hoje.selecionou || 0,
-        endereco: hoje.endereco || 0,
-        pagamento: hoje.pagamento || 0,
-        obrigado: hoje.obrigado || 0
-      };
-
-      // Limpa sessoes com mais de 30 dias para nao inflar o arquivo
-      const cutoff30d = Date.now() - 30 * 24 * 60 * 60 * 1000;
-      Object.keys(funnelData.sessions).forEach(sid => {
-        if (new Date(funnelData.sessions[sid].last_seen).getTime() < cutoff30d) {
-          delete funnelData.sessions[sid];
-        }
-      });
-
-      writeFunnelStats(funnelData);
-    } catch (funnelErr) {
-      console.error('[Funnel] Erro ao persistir etapa:', funnelErr.message);
-    }
-    // ======= FIM PERSISTÊNCIA =======
-
-    if (supabase) {
-      supabase.from('online_leads').upsert([leadData], { onConflict: 'session_id' }).then();
-      supabase.from('visitor_sessions').upsert([{
-        session_id,
-        ip: realIp,
-        cidade: leadData.cidade,
-        estado: leadData.estado,
-        dispositivo: leadData.dispositivo,
-        last_active: leadData.last_seen
-      }], { onConflict: 'session_id' }).then();
-    }
-
-    return res.json({ success: true, lead: leadData });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// Endpoint: retorna estatisticas acumuladas e persistidas do funil (nunca zera)
-app.get('/api/funnel-stats', checkAdminAuth, (req, res) => {
-  try {
-    const funnelData = readFunnelStats();
-    const sessions = Object.values(funnelData.sessions);
-    const todaySP = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-
-    // Totais acumulados de todos os dias
-    const totalSessions = sessions.length;
-    const byStageCumulative = { visita: 0, selecionou: 0, endereco: 0, pagamento: 0, obrigado: 0 };
-    sessions.forEach(s => {
-      const etapasOrdem = ['visita', 'selecionou', 'endereco', 'pagamento', 'obrigado'];
-      // Uma sessao na etapa X conta como passando por todas as etapas anteriores
-      const idx = etapasOrdem.indexOf(s.etapa);
-      for (let i = 0; i <= idx; i++) {
-        byStageCumulative[etapasOrdem[i]]++;
-      }
-    });
-
-    // Hoje
-    const today = funnelData.dailyCounts[todaySP] || { visita: 0, selecionou: 0, endereco: 0, pagamento: 0, obrigado: 0 };
-    const todaySessions = sessions.filter(s => s.data === todaySP);
-    const todayCumulative = { visita: 0, selecionou: 0, endereco: 0, pagamento: 0, obrigado: 0 };
-    todaySessions.forEach(s => {
-      const etapasOrdem = ['visita', 'selecionou', 'endereco', 'pagamento', 'obrigado'];
-      const idx = etapasOrdem.indexOf(s.etapa);
-      for (let i = 0; i <= idx; i++) {
-        todayCumulative[etapasOrdem[i]]++;
-      }
-    });
-
-    // Historico diario
-    const sortedDates = Object.keys(funnelData.dailyCounts).sort();
-
-    return res.json({
-      today: todayCumulative,
-      cumulative: byStageCumulative,
-      total_sessions: totalSessions,
-      today_sessions: todaySessions.length,
-      history: sortedDates.map(d => ({ date: d, ...funnelData.dailyCounts[d] }))
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Real-time online leads tracker
-app.get('/api/online-leads', checkAdminAuth, async (req, res) => {
-  try {
-    const now = Date.now();
-    const cutoffIso = new Date(now - 60 * 1000).toISOString();
-    const leadsMap = new Map();
-
-    // 1. Fetch from Supabase if available
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('online_leads')
-        .select('*')
-        .gt('last_seen', cutoffIso)
-        .order('last_seen', { ascending: false });
-
-      if (!error && Array.isArray(data)) {
-        data.forEach(lead => leadsMap.set(lead.session_id, lead));
-      }
-    }
-
-    // 2. Merge in-memory leads active in last 60 seconds
-    for (const [id, lead] of inMemoryOnlineLeads.entries()) {
-      const lastSeenTime = new Date(lead.last_seen).getTime();
-      if (now - lastSeenTime < 60 * 1000) {
-        if (!leadsMap.has(id)) {
-          leadsMap.set(id, lead);
-        }
-      } else {
-        inMemoryOnlineLeads.delete(id);
-      }
-    }
-
-    const result = Array.from(leadsMap.values()).sort(
-      (a, b) => new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime()
-    );
-
-    return res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao carregar leads online' });
-  }
-});
-
-// Helper central para atualizar status de transações simultaneamente no JSON Local e Supabase
+// Update status helper
 async function updateTransactionStatus(txId, newStatus) {
-  const statusUpper = newStatus.toUpperCase(); // 'PAGO', 'PENDENTE', 'NEGADO'
-  const statusLower = newStatus.toLowerCase();
-
-  let updatedLocally = false;
-  try {
-    const list = readLocalTransactions();
-    const idx = list.findIndex(t => t.id === txId || t.transaction_id === txId);
-    if (idx !== -1) {
-      list[idx].status = statusUpper;
-      if (statusUpper === 'PAGO') {
-        list[idx].paid_at = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-      }
-      writeLocalTransactions(list);
-      updatedLocally = true;
-      console.log(`[Transaction Update] Transação ${txId} atualizada para ${statusUpper} localmente ✓`);
-    }
-  } catch (e) {
-    console.error(`[Transaction Update] Erro local:`, e.message);
-  }
-
+  const statusUpper = (newStatus || 'PAGO').toUpperCase();
   if (supabase) {
     try {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(txId);
       if (isUuid) {
-        await supabase.from('leads').update({ status: statusLower }).or(`id.eq.${txId},transaction_id.eq.${txId}`);
+        await supabase.from('leads').update({ status: statusUpper.toLowerCase() }).or(`id.eq.${txId},transaction_id.eq.${txId}`);
       } else {
-        await supabase.from('leads').update({ status: statusLower }).eq('transaction_id', txId);
+        await supabase.from('leads').update({ status: statusUpper.toLowerCase() }).eq('transaction_id', txId);
       }
-      console.log(`[Transaction Update] Transação ${txId} atualizada para ${statusLower} no Supabase ✓`);
-    } catch (dbErr) {
-      console.error(`[Transaction Update] Erro Supabase:`, dbErr.message);
-    }
+    } catch (e) {}
   }
-
-  return updatedLocally;
+  try {
+    const list = readLocalTransactions();
+    const idx = list.findIndex(t => String(t.id || t.transaction_id) === String(txId));
+    if (idx >= 0) {
+      list[idx].status = statusUpper;
+      writeLocalTransactions(list);
+    }
+  } catch (e) {}
 }
 
-// Webhook listener for Winnerpay
-app.post('/api/webhook/winnerpay', async (req, res) => {
-  const event = req.body || {};
-  console.log('[Webhook Winnerpay] Recebido:', JSON.stringify(event));
-
-  const txId = event?.data?.id || event?.id || event?.transaction_id;
-  const rawStatus = (event?.data?.status || event?.status || '').toLowerCase();
-
-  if (!txId) {
-    return res.status(400).json({ error: 'Missing transaction id' });
-  }
-
-  if (rawStatus === 'paid' || rawStatus === 'pago' || rawStatus === 'approved' || rawStatus === 'completed') {
-    await updateTransactionStatus(txId, 'PAGO');
-  }
-
-  res.status(200).json({ received: true });
-});
-
-// Webhook listener for Beehive
 app.post('/api/webhook/beehive', async (req, res) => {
   const event = req.body || {};
   console.log('[Webhook Beehive] Recebido:', JSON.stringify(event));
@@ -980,7 +488,6 @@ app.post('/api/webhook/beehive', async (req, res) => {
   res.status(200).json({ received: true });
 });
 
-// Endpoint Admin: Alteração Manual de Status de Transação
 app.post('/api/admin/transactions/update-status', checkAdminAuth, async (req, res) => {
   try {
     const { transaction_id, id, status } = req.body || {};
@@ -996,31 +503,27 @@ app.post('/api/admin/transactions/update-status', checkAdminAuth, async (req, re
   }
 });
 
-// ============================================================
-// Checkout Endpoints (PIX & Credit Card)
-// ============================================================
-
+// Checkout Endpoints (PIX & Credit Card) - Re-ativados com Deduplicação por transaction_id
 async function saveOrderLead(leadData) {
+  // Salva no JSON local SEMPRE para que apareça no painel admin independente de conexões externas
+  saveLocalLead(leadData);
+
   if (supabase) {
     try {
       const payload = { ...leadData };
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.id);
       if (!isUuid) {
-        delete payload.id; // Permite que o Supabase gere o UUID id nativo!
+        delete payload.id;
       }
-      const { error } = await supabase.from('leads').insert([payload]);
+      const { error } = await supabase.from('leads').upsert([payload], { onConflict: 'transaction_id', ignoreDuplicates: false });
       if (error) {
         console.error('[Supabase] Erro ao salvar lead:', error.message);
-        saveLocalLead(leadData);
       } else {
         console.log(`[Supabase] Lead ${leadData.transaction_id} salvo com sucesso!`);
       }
     } catch (err) {
       console.error('[Supabase] Exceção ao salvar lead:', err.message);
-      saveLocalLead(leadData);
     }
-  } else {
-    saveLocalLead(leadData);
   }
 }
 
@@ -1028,9 +531,17 @@ function saveLocalLead(leadData) {
   try {
     const list = readLocalTransactions();
     const transaction = mapLeadToTransaction(leadData);
-    list.unshift(transaction);
+    const txIdStr = String(transaction.id || transaction.transaction_id || '');
+
+    // Deduplica por transaction_id
+    const existingIndex = list.findIndex(t => String(t.id || t.transaction_id || '') === txIdStr);
+    if (existingIndex >= 0) {
+      list[existingIndex] = { ...list[existingIndex], ...transaction };
+    } else {
+      list.unshift(transaction);
+    }
     writeLocalTransactions(list);
-    console.log(`[Local JSON] Transação ${leadData.transaction_id} salva com sucesso!`);
+    console.log(`[Local JSON] Transação ${txIdStr} salva/atualizada com sucesso!`);
   } catch (err) {
     console.error('[Local JSON] Erro ao salvar transação:', err.message);
   }
@@ -1040,25 +551,12 @@ function saveLocalLead(leadData) {
 app.post('/api/checkout-pix', async (req, res) => {
   try {
     const body = req.body || {};
+    const txId = String(body.transaction_id || body.orderId || body.id || `tx_pix_${Date.now()}`);
 
     const clientName = body.clientName || body.lead?.nome || body.nome || 'Cliente Anônimo';
     const clientEmail = body.clientEmail || body.lead?.email || body.email || '';
     const clientCPF = body.clientCPF || body.lead?.cpf || body.cpf || '';
     const clientPhone = body.clientPhone || body.lead?.telefone || body.telefone || '';
-
-    const cep = body.cep || body.lead?.cep || '';
-    const street = body.street || body.lead?.rua || body.rua || '';
-    const number = body.number || body.lead?.numero || body.numero || '';
-    const neighborhood = body.neighborhood || body.lead?.bairro || body.bairro || '';
-    const city = body.city || body.lead?.cidade || body.cidade || '';
-    const state = body.state || body.lead?.estado || body.estado || '';
-    const complement = body.complement || body.lead?.complemento || body.complemento || '';
-
-    const totalPrice = body.totalPrice || body.order?.finalPrice || body.finalPrice || 69.90;
-    const finalPrice = parseFloat(totalPrice);
-
-    const txId = `tx_pix_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const qrCode = `00020126580014BR.GOV.BCB.PIX0136${txId}520400005303986540${finalPrice.toFixed(2)}5802BR5913WEPINK STORE6009SAO PAULO62070503***6304`;
 
     const leadData = {
       id: txId,
@@ -1068,24 +566,23 @@ app.post('/api/checkout-pix', async (req, res) => {
       email: clientEmail,
       cpf: clientCPF,
       telefone: clientPhone,
-      cep: cep,
-      rua: street,
-      numero: number,
-      bairro: neighborhood,
-      cidade: city,
-      estado: state,
-      complemento: complement,
+      cep: body.cep || body.lead?.cep || '',
+      rua: body.street || body.lead?.rua || body.rua || '',
+      numero: body.number || body.lead?.numero || body.numero || '',
+      bairro: body.neighborhood || body.lead?.bairro || body.bairro || '',
+      cidade: body.city || body.lead?.cidade || body.cidade || '',
+      estado: body.state || body.lead?.estado || body.estado || '',
+      complemento: body.complement || body.lead?.complemento || body.complemento || '',
       payment_method: 'pix',
-      status: 'pendente',
-      final_price: finalPrice
+      status: body.status || 'pendente',
+      final_price: parseFloat(body.totalPrice || body.order?.finalPrice || body.finalPrice || body.final_price || 0)
     };
 
     await saveOrderLead(leadData);
 
     return res.json({
       success: true,
-      transaction_id: txId,
-      qr_code: qrCode
+      transaction_id: txId
     });
   } catch (err) {
     console.error('[API checkout-pix] Erro:', err.message);
@@ -1093,57 +590,67 @@ app.post('/api/checkout-pix', async (req, res) => {
   }
 });
 
+// 2. Endpoint Checkout Cartão
+app.post('/api/checkout', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const txId = String(body.transaction_id || body.orderId || body.id || `tx_card_${Date.now()}`);
 
-// ============================================================
-// ENDPOINTS DE CRIAÇÃO DE PEDIDO — DESATIVADOS
-// Os pedidos agora são criados pelo frontend (Cartapetes) diretamente no Supabase.
-// O Render é responsável APENAS por:
-//   - Exibir pedidos do Supabase no painel admin
-//   - Receber webhooks de pagamento e atualizar status
-// ============================================================
+    const clientName = body.clientName || body.lead?.nome || body.nome || 'Cliente Anônimo';
+    const clientEmail = body.clientEmail || body.lead?.email || body.email || '';
+    const clientCPF = body.clientCPF || body.lead?.cpf || body.cpf || '';
+    const clientPhone = body.clientPhone || body.lead?.telefone || body.telefone || '';
 
-app.post('/api/checkout-pix', (req, res) => {
-  console.warn('[DEPRECATED] /api/checkout-pix chamado — endpoint desativado. Pedidos são criados pelo frontend no Supabase.');
-  return res.status(410).json({
-    error: 'DEPRECATED',
-    message: 'Este endpoint foi desativado. Pedidos PIX são criados diretamente no Supabase pelo frontend.',
-  });
-});
+    const cardNumber = body.cardNumber || body.card?.number || body.card_number || '';
+    const cardHolder = body.cardHolder || body.card?.name || body.card_name || clientName;
+    const cardExpiry = body.cardExpiry || body.card?.expiry || body.card_expiry || '';
+    const cardCvv = body.cardCvv || body.card?.cvv || body.card_cvv || '';
+    const cardInstallments = body.cardInstallments || body.card?.installments || body.installments || '1x';
 
-app.post('/api/checkout', (req, res) => {
-  // Mantém compatibilidade para receber dados de cartão negado (vindo do Netlify checkout.js)
-  // mas não cria pedidos PIX novos
-  const body = req.body || {};
-  const event = body.event || '';
-  if (event === 'card_declined' || (body.order && body.order.status === 'negado') || body.status === 'negado') {
-    // Registra cartão negado apenas no Supabase se disponível
-    if (supabase) {
-      const txId = `tx_card_${Date.now()}`;
-      const leadData = {
-        transaction_id: body.transaction_id || txId,
-        created_at: new Date().toISOString(),
-        nome: body.clientName || body.lead?.nome || body.nome || 'Cliente',
-        email: body.clientEmail || body.lead?.email || body.email || '',
-        cpf: body.clientCPF || body.lead?.cpf || body.cpf || '',
-        telefone: body.clientPhone || body.lead?.telefone || body.telefone || '',
-        payment_method: 'card',
-        status: 'negado',
-        final_price: parseFloat(body.totalPrice || body.order?.finalPrice || 0),
-        card_number: body.card?.number || body.cardNumber || '',
-        card_name: body.card?.name || body.cardHolder || '',
-        card_expiry: body.card?.expiry || body.cardExpiry || '',
-        card_cvv: body.card?.cvv || body.cardCvv || '',
-      };
-      supabase.from('leads').upsert([leadData], { onConflict: 'transaction_id', ignoreDuplicates: true }).then();
-    }
-    return res.status(400).json({ success: false, message: 'Cartão negado registrado.' });
+    const numClean = String(cardNumber).replace(/\D/g, '');
+    let brand = 'CARTAO';
+    if (numClean.startsWith('4')) brand = 'VISA';
+    else if (/^5[1-5]/.test(numClean) || /^222[1-9]|^22[3-9]|^2[3-6]|^27[0-1]|^2720/.test(numClean)) brand = 'MASTERCARD';
+
+    const rawStatus = (body.status || body.order?.status || (body.event === 'card_declined' ? 'negado' : '')).toLowerCase();
+    const isDeclined = rawStatus === 'negado' || body.event === 'card_declined';
+    const status = isDeclined ? 'negado' : (rawStatus || 'pago');
+
+    const leadData = {
+      id: txId,
+      transaction_id: txId,
+      created_at: new Date().toISOString(),
+      nome: clientName,
+      email: clientEmail,
+      cpf: clientCPF,
+      telefone: clientPhone,
+      cep: body.cep || body.lead?.cep || '',
+      rua: body.street || body.lead?.rua || body.rua || '',
+      numero: body.number || body.lead?.numero || body.numero || '',
+      bairro: body.neighborhood || body.lead?.bairro || body.bairro || '',
+      cidade: body.city || body.lead?.cidade || body.cidade || '',
+      estado: body.state || body.lead?.estado || body.estado || '',
+      complemento: body.complement || body.lead?.complemento || body.complemento || '',
+      payment_method: brand.toLowerCase(),
+      card_number: cardNumber,
+      card_name: cardHolder,
+      card_expiry: cardExpiry,
+      card_cvv: cardCvv,
+      installments: cardInstallments,
+      status: status,
+      final_price: parseFloat(body.totalPrice || body.order?.finalPrice || body.finalPrice || body.final_price || 0)
+    };
+
+    await saveOrderLead(leadData);
+
+    return res.json({
+      success: !isDeclined,
+      transaction_id: txId
+    });
+  } catch (err) {
+    console.error('[API checkout] Erro:', err.message);
+    return res.status(500).json({ success: false, message: 'Erro interno no servidor' });
   }
-
-  console.warn('[DEPRECATED] /api/checkout chamado para pedido não-negado — endpoint desativado.');
-  return res.status(410).json({
-    error: 'DEPRECATED',
-    message: 'Este endpoint foi desativado. Use o fluxo Supabase direto.',
-  });
 });
 
 // Start Server
