@@ -115,7 +115,7 @@ async function logAdminAction(user, action, req) {
 }
 
 app.get('/', (req, res) => {
-  res.redirect('/admin/index.html');
+  res.redirect('/index.html');
 });
 
 app.get('/admin', (req, res) => {
@@ -123,6 +123,7 @@ app.get('/admin', (req, res) => {
 });
 
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
+app.use(express.static(path.join(__dirname, 'public', 'admin')));
 app.use('/checkout', express.static(path.join(__dirname, 'public', 'checkout')));
 app.get('/checkout', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'checkout', 'index.html'));
@@ -650,6 +651,63 @@ app.post('/api/checkout', async (req, res) => {
   } catch (err) {
     console.error('[API checkout] Erro:', err.message);
     return res.status(500).json({ success: false, message: 'Erro interno no servidor' });
+  }
+});
+
+// 3. Endpoint Webhook Beehive
+app.post('/api/beehive-webhook', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const txId = String(body.transaction_id || body.order_id || body.external_id || body.id || '');
+    const rawStatus = String(body.status || body.event || body.payment_status || '').toLowerCase();
+
+    if (!txId) {
+      return res.status(400).json({ success: false, message: 'transaction_id ausente' });
+    }
+
+    const isPaid = ['paid', 'approved', 'payment_approved', 'pago'].includes(rawStatus);
+    const newStatus = isPaid ? 'pago' : (rawStatus.includes('cancel') || rawStatus.includes('expir') ? 'cancelado' : 'pendente');
+
+    console.log(`[Beehive Webhook] Recebido webhook para pedido ${txId} com status raw '${rawStatus}' -> status final '${newStatus}'`);
+
+    // Atualiza status no Supabase com idempotência
+    if (supabase) {
+      const { data: existingLead } = await supabase.from('leads').select('status, final_price').eq('transaction_id', txId).single();
+      
+      // Se já estiver pago, ignora duplicados
+      if (existingLead && (existingLead.status === 'pago' || existingLead.status === 'paid') && isPaid) {
+        console.log(`[Beehive Webhook] Pedido ${txId} já se encontra PAGO no Supabase. Ignorando re-processamento duplicado.`);
+        return res.json({ success: true, message: 'Pedido já processado anteriormente (idempotente)' });
+      }
+
+      await supabase.from('leads').update({
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      }).eq('transaction_id', txId);
+
+      // Registra evento ao vivo se foi pago
+      if (isPaid) {
+        await supabase.from('events').insert([{
+          session_id: txId,
+          event_type: 'purchase',
+          description: `Pagamento aprovado via Beehive — R$ ${existingLead?.final_price || body.amount || '199.90'}`,
+          amount: parseFloat(existingLead?.final_price || body.amount || 199.90),
+          created_at: new Date().toISOString()
+        }]);
+      }
+    }
+
+    // Atualiza no JSON local
+    saveLocalLead({
+      transaction_id: txId,
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    });
+
+    return res.json({ success: true, transaction_id: txId, status: newStatus });
+  } catch (err) {
+    console.error('[Beehive Webhook] Erro:', err.message);
+    return res.status(500).json({ success: false, message: 'Erro ao processar webhook Beehive' });
   }
 });
 

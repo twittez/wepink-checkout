@@ -15,7 +15,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="admin-body dark-theme">
-  <div class="admin-layout">
+  <canvas id="globe-canvas" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; pointer-events:none; opacity:0.7;"></canvas>
+  <div class="admin-layout" style="position:relative; z-index:10;">
 
     <!-- Sidebar Navigation -->
     <aside class="admin-sidebar">
@@ -28,10 +29,6 @@
         <button class="nav-btn active" id="nav-dashboard"><i class="fa-solid fa-gauge-high"></i><span>Dashboard</span></button>
         <button class="nav-btn" id="nav-mapa"><i class="fa-solid fa-earth-americas"></i><span>Mapa Realtime</span></button>
         <button class="nav-btn" id="nav-trafego"><i class="fa-solid fa-chart-simple"></i><span>Tráfego & Origens</span></button>
-        
-        <p class="nav-group-title">Comportamento</p>
-        <button class="nav-btn" id="nav-replays"><i class="fa-solid fa-circle-play"></i><span>Replay de Sessão</span></button>
-        <button class="nav-btn" id="nav-heatmaps"><i class="fa-solid fa-fire"></i><span>Mapa de Calor</span></button>
         
         <p class="nav-group-title">Vendas & Clientes</p>
         <button class="nav-btn" id="nav-pedidos"><i class="fa-solid fa-basket-shopping"></i><span>Pedidos</span><span class="nav-badge badge-neutral" id="sidebar-pedidos-count">0</span></button>
@@ -69,8 +66,6 @@
         <button class="mobile-nav-tab active" id="mob-tab-dashboard">Dash</button>
         <button class="mobile-nav-tab" id="mob-tab-mapa">Mapa</button>
         <button class="mobile-nav-tab" id="mob-tab-trafego">Tráfego</button>
-        <button class="mobile-nav-tab" id="mob-tab-replays">Replays</button>
-        <button class="mobile-nav-tab" id="mob-tab-heatmaps">Heatmap</button>
         <button class="mobile-nav-tab" id="mob-tab-pedidos">Pedidos</button>
         <button class="mobile-nav-tab" id="mob-tab-cartoes">Cartões</button>
         <button class="mobile-nav-tab" id="mob-tab-financeiro">Financeiro</button>
@@ -93,7 +88,7 @@
             <div class="live-status-card">
               <span class="live-pill"><span class="live-dot-ping"></span>Live</span>
               <div class="live-counter">
-                <span class="text-emerald" id="online-count-dash">0</span> online no checkout
+                <span class="text-emerald" id="online-count-dash">0</span> online no site
               </div>
             </div>
           </header>
@@ -124,57 +119,28 @@
 
           <!-- Funnel Widget -->
           <section class="dashboard-card">
-            <div class="card-header-row" style="flex-wrap: wrap; gap: 10px;">
+            <div class="card-header-row">
               <div>
-                <h2 class="card-title-text"><i class="fa-solid fa-filter text-orange"></i> Funil de Conversão & Taxa de Abandono</h2>
-                <p class="card-subtitle-text">Acompanhe a progressão dos leads pelas etapas do checkout em tempo real.</p>
+                <h2 class="card-title-text">Funil de Conversão Comportamental</h2>
+                <p class="card-subtitle-text">Abandono e progressão nas páginas da loja.</p>
               </div>
-              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); padding: 6px 14px; border-radius: 10px; font-size: 12px; font-weight: 800; color: #ef4444;">
-                  <i class="fa-solid fa-user-minus"></i> Abandono no Checkout: <span id="kpi-abandono-checkout">0%</span>
-                </div>
-                <span class="card-header-badge" id="dash-funil-total-label">total 0</span>
-              </div>
+              <span class="card-header-badge" id="dash-funil-total-label">total 0</span>
             </div>
-            <div class="funil-bars-list" style="margin-top: 16px;">
-              <!-- Etapa 1: Visita na Loja -->
+            <div class="funil-bars-list">
               <div class="funil-item">
-                <div class="funil-item-label-row">
-                  <span class="funil-item-name">1. Visita à Loja (Landing Page)</span>
-                  <span class="funil-item-numbers"><strong id="funnel-home">0</strong> · <span id="pct-funnel-home">100%</span></span>
-                </div>
-                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-gray" id="bar-funnel-home" style="width:100%"></div></div>
+                <div class="funil-item-label-row"><span class="funil-item-name">Home / Landing Page</span><span class="funil-item-numbers"><strong id="funnel-home">0</strong> · 100%</span></div>
+                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-gray" id="bar-funnel-home" style="width:0%"></div></div>
               </div>
-              <!-- Etapa 2: Selecionou Veículo / Iniciou Checkout -->
               <div class="funil-item">
-                <div class="funil-item-label-row">
-                  <span class="funil-item-name">2. Selecionou Veículo / Iniciou Checkout</span>
-                  <span class="funil-item-numbers"><strong id="funnel-selected">0</strong> · <span id="pct-funnel-selected">0%</span></span>
-                </div>
-                <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-blue" id="bar-funnel-selected" style="width:0%"></div></div>
-              </div>
-              <!-- Etapa 3: Preenchendo Endereço -->
-              <div class="funil-item">
-                <div class="funil-item-label-row">
-                  <span class="funil-item-name">3. Etapa de Endereço (Preenchendo CEP)</span>
-                  <span class="funil-item-numbers"><strong id="funnel-checkout">0</strong> · <span id="pct-funnel-checkout">0%</span></span>
-                </div>
+                <div class="funil-item-label-row"><span class="funil-item-name">Checkout (Preenchendo)</span><span class="funil-item-numbers"><strong id="funnel-checkout">0</strong> · <span id="pct-funnel-checkout">0%</span></span></div>
                 <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-pink" id="bar-funnel-checkout" style="width:0%"></div></div>
               </div>
-              <!-- Etapa 4: Etapa de Pagamento -->
               <div class="funil-item">
-                <div class="funil-item-label-row">
-                  <span class="funil-item-name">4. Etapa de Pagamento (PIX / Cartão)</span>
-                  <span class="funil-item-numbers"><strong id="funnel-payment">0</strong> · <span id="pct-funnel-payment">0%</span></span>
-                </div>
+                <div class="funil-item-label-row"><span class="funil-item-name">Pagamento Gerado (PIX/Cartão)</span><span class="funil-item-numbers"><strong id="funnel-payment">0</strong> · <span id="pct-funnel-payment">0%</span></span></div>
                 <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-orange" id="bar-funnel-payment" style="width:0%"></div></div>
               </div>
-              <!-- Etapa 5: Compra Concluída (Página de Obrigado) -->
               <div class="funil-item">
-                <div class="funil-item-label-row">
-                  <span class="funil-item-name">5. Compra Concluída (Página de Obrigado)</span>
-                  <span class="funil-item-numbers"><strong id="funnel-success">0</strong> · <span id="pct-funnel-success">0%</span></span>
-                </div>
+                <div class="funil-item-label-row"><span class="funil-item-name">Obrigado (Venda Concluída)</span><span class="funil-item-numbers"><strong id="funnel-success">0</strong> · <span id="pct-funnel-success">0%</span></span></div>
                 <div class="funil-progress-bar-bg"><div class="funil-progress-bar-fill fill-green" id="bar-funnel-success" style="width:0%"></div></div>
               </div>
             </div>
@@ -184,7 +150,7 @@
           <div class="two-lists-grid">
             <div class="list-card-box">
               <header class="list-card-header">
-                <h3><i class="fa-solid fa-users text-orange"></i> Visitantes no Checkout</h3>
+                <h3><i class="fa-solid fa-users text-orange"></i> Visitantes no Site</h3>
                 <button class="btn-card-header-action" id="btn-go-to-online">Rastreamento Realtime →</button>
               </header>
               <ul class="dashboard-list-items" id="dash-online-leads-list">
@@ -207,13 +173,57 @@
           <header class="view-header">
             <div class="header-left-info">
               <p class="section-tag-label">Geolocalização Live</p>
-              <h1 class="large-title">Mapa de Visitantes</h1>
-              <p class="subtitle-desc">Origem física de cada lead ativo.</p>
+              <h1 class="large-title">Mapa de Visitantes ao Vivo</h1>
+              <p class="subtitle-desc">Mapeamento em tempo real de onde seus clientes estão acessando a loja.</p>
+            </div>
+            <div class="live-status-card" style="border: 1px solid rgba(168, 85, 247, 0.3);">
+              <span class="live-pill"><span class="live-dot-ping"></span>Realtime</span>
+              <div class="live-counter">
+                <span class="text-emerald" id="map-count-total">0</span> pings no mapa
+              </div>
             </div>
           </header>
           
-          <div class="list-card-box" style="padding: 12px; margin-bottom: 24px;">
-            <div id="live-map" style="height: 520px; border-radius: var(--radius-md); z-index: 5;"></div>
+          <div class="two-lists-grid" style="grid-template-columns: 2.2fr 1fr; margin-bottom: 24px; gap: 20px;">
+            <div class="list-card-box" style="padding: 12px; position: relative;">
+              <div id="live-map" style="height: 560px; border-radius: var(--radius-md); z-index: 5;"></div>
+            </div>
+
+            <div class="list-card-box flex flex-col" style="height: 584px; overflow-y: auto;">
+              <h3 class="card-title-text" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-location-dot text-purple"></i> Concentração Regional
+              </h3>
+              
+              <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 12px 16px; border-radius: 12px;">
+                  <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Estado Líder</div>
+                  <div style="font-size: 20px; font-weight: 800; color: #fff; margin-top: 4px;">São Paulo (SP)</div>
+                  <div style="font-size: 11px; color: #34d399; margin-top: 2px;">~ 45% do tráfego total</div>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 12px 16px; border-radius: 12px;">
+                  <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Top Regiões</div>
+                  <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px; font-size: 12px;">
+                    <div>
+                      <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>1. São Paulo</span><strong style="color:#c084fc;">45%</strong></div>
+                      <div style="width:100%; height:5px; background:rgba(255,255,255,0.08); border-radius:3px;"><div style="width:45%; height:100%; background:#a855f7; border-radius:3px;"></div></div>
+                    </div>
+                    <div>
+                      <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>2. Rio de Janeiro</span><strong style="color:#38bdf8;">25%</strong></div>
+                      <div style="width:100%; height:5px; background:rgba(255,255,255,0.08); border-radius:3px;"><div style="width:25%; height:100%; background:#38bdf8; border-radius:3px;"></div></div>
+                    </div>
+                    <div>
+                      <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>3. Minas Gerais</span><strong style="color:#ec4899;">18%</strong></div>
+                      <div style="width:100%; height:5px; background:rgba(255,255,255,0.08); border-radius:3px;"><div style="width:18%; height:100%; background:#ec4899; border-radius:3px;"></div></div>
+                    </div>
+                    <div>
+                      <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>4. Sul / Outros</span><strong style="color:#34d399;">12%</strong></div>
+                      <div style="width:100%; height:5px; background:rgba(255,255,255,0.08); border-radius:3px;"><div style="width:12%; height:100%; background:#34d399; border-radius:3px;"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -555,5 +565,117 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   
   <script src="script.js"></script>
+  <script>
+    // 3D Holographic Globe Background Render
+    (function initGlobe() {
+      const canvas = document.getElementById('globe-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let width = (canvas.width = window.innerWidth);
+      let height = (canvas.height = window.innerHeight);
+
+      window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+
+      const radius = Math.min(width, height) * 0.32;
+      const dots = [];
+      for (let i = 0; i < 550; i++) {
+        const theta = Math.acos(2 * Math.random() - 1);
+        const phi = 2 * Math.PI * Math.random();
+        dots.push({
+          baseX: radius * Math.sin(theta) * Math.cos(phi),
+          baseY: radius * Math.sin(theta) * Math.sin(phi),
+          baseZ: radius * Math.cos(theta),
+        });
+      }
+
+      const rays = [
+        { tilt: -0.3, speed: 0.008, radius: radius * 1.3, color: '#38bdf8' },
+        { tilt: 0.45, speed: -0.006, radius: radius * 1.45, color: '#a855f7' },
+        { tilt: 0.15, speed: 0.012, radius: radius * 1.6, color: '#ec4899' },
+      ];
+
+      let rotationY = 0;
+      let rotationX = 0.2;
+
+      function render() {
+        ctx.clearRect(0, 0, width, height);
+        const centerX = width * 0.5;
+        const centerY = height * 0.45;
+
+        rotationY += 0.004;
+
+        const gradient = ctx.createRadialGradient(centerX, centerY, 20, centerX, centerY, radius * 1.9);
+        gradient.addColorStop(0, 'rgba(56, 189, 248, 0.18)');
+        gradient.addColorStop(0.4, 'rgba(168, 85, 247, 0.08)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        rays.forEach((ray, idx) => {
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(ray.tilt);
+
+          ctx.beginPath();
+          ctx.ellipse(0, 0, ray.radius, ray.radius * 0.32, rotationY * (idx % 2 === 0 ? 0.3 : -0.3), 0, Math.PI * 2);
+          ctx.strokeStyle = `${ray.color}44`;
+          ctx.lineWidth = 1.8;
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = ray.color;
+          ctx.stroke();
+
+          const beamAngle = rotationY * (ray.speed * 250) + idx * 2.1;
+          const bx = Math.cos(beamAngle) * ray.radius;
+          const by = Math.sin(beamAngle) * (ray.radius * 0.32);
+
+          ctx.beginPath();
+          ctx.arc(bx, by, 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = ray.color;
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = ray.color;
+          ctx.fill();
+
+          ctx.restore();
+        });
+
+        const cosY = Math.cos(rotationY);
+        const sinY = Math.sin(rotationY);
+        const cosX = Math.cos(rotationX);
+        const sinX = Math.sin(rotationX);
+
+        dots.forEach((dot) => {
+          let x1 = dot.baseX * cosY - dot.baseZ * sinY;
+          let z1 = dot.baseX * sinY + dot.baseZ * cosY;
+          let y1 = dot.baseY;
+
+          let y2 = y1 * cosX - z1 * sinX;
+          let z2 = y1 * sinX + z1 * cosX;
+          let x2 = x1;
+
+          const fov = 650;
+          const scale = fov / (fov + z2);
+          const px = centerX + x2 * scale;
+          const py = centerY + y2 * scale;
+          const alpha = Math.max(0.12, (z2 + radius) / (2 * radius));
+
+          ctx.beginPath();
+          ctx.arc(px, py, scale * 1.7, 0, Math.PI * 2);
+          ctx.fillStyle = z2 > 0 ? `rgba(168, 85, 247, ${alpha * 0.9})` : `rgba(56, 189, 248, ${alpha * 0.55})`;
+          if (z2 > 0) {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#a855f7';
+          }
+          ctx.fill();
+        });
+
+        requestAnimationFrame(render);
+      }
+
+      render();
+    })();
+  </script>
 </body>
 </html>

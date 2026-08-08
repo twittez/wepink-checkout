@@ -124,34 +124,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===========================================================
   async function checkAuth() {
     try {
-      // Primeira prioridade: verifica se tem token válido no localStorage
-      const localToken = localStorage.getItem('admin_token');
-      if (localToken === 'twittez_logged_in') {
-        // Token local válido, continua sem precisar do cookie
-        return;
-      }
-
-      // Segunda: verifica com o servidor via cookie
       const res = await fetch('/api/auth/status');
       const data = await res.json();
-      if (data.authenticated) {
-        // Salva no localStorage para persistir entre reloads
-        localStorage.setItem('admin_token', 'twittez_logged_in');
-        if (roleDisplay) roleDisplay.textContent = `Função: ${data.role.toUpperCase()}`;
-        if (data.role === 'operator') {
-          if (navBtns.auditoria) navBtns.auditoria.style.display = 'none';
-        }
-      } else {
-        // Sem cookie e sem token local: manda para login
-        localStorage.removeItem('admin_token');
+      if (!data.authenticated) {
         window.location.href = 'login.html';
+        return;
+      }
+      // Set role display
+      roleDisplay.textContent = `Função: ${data.role.toUpperCase()}`;
+      
+      // Restricted views for Operator
+      if (data.role === 'operator') {
+        if (navBtns.auditoria) navBtns.auditoria.style.display = 'none';
       }
     } catch (err) {
-      // Se o servidor não responder mas tiver token local, não redireciona
-      const localToken = localStorage.getItem('admin_token');
-      if (!localToken) {
-        window.location.href = 'login.html';
-      }
+      window.location.href = 'login.html';
     }
   }
 
@@ -232,133 +219,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const currency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   // ===========================================================
-  // 1. Dashboard: Load Real-time Stats & Funnel + Audio Notification
+  // 1. Dashboard: Load Real-time Stats & Funnel
   // ===========================================================
-  let knownOrderIds = null;
-  let soundEnabled = true;
-
-  function playOrderSound() {
-    if (!soundEnabled) return;
-    try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const now = audioCtx.currentTime;
-
-      // Som agradável de caixa registradora / notificação (D5 -> A5)
-      const osc1 = audioCtx.createOscillator();
-      const gain1 = audioCtx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(587.33, now); // D5
-      gain1.gain.setValueAtTime(0.3, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc1.connect(gain1);
-      gain1.connect(audioCtx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.35);
-
-      const osc2 = audioCtx.createOscillator();
-      const gain2 = audioCtx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(880, now + 0.15); // A5
-      gain2.gain.setValueAtTime(0.4, now + 0.15);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
-      osc2.connect(gain2);
-      gain2.connect(audioCtx.destination);
-      osc2.start(now + 0.15);
-      osc2.stop(now + 0.65);
-    } catch (err) {
-      console.warn('[Som de Notificação] Não foi possível reproduzir:', err);
-    }
-  }
-
-  function checkNewOrdersNotification(newTxList) {
-    if (knownOrderIds === null) {
-      knownOrderIds = new Set(newTxList.map(t => t.id || t.transaction_id));
-      return;
-    }
-
-    const brandNew = newTxList.filter(t => !knownOrderIds.has(t.id || t.transaction_id));
-    if (brandNew.length > 0) {
-      playOrderSound();
-      const firstClient = brandNew[0].client ? brandNew[0].client.name : 'Novo Cliente';
-      showToastNotification(`🎉 Novo pedido recebido! (${firstClient} - ${brandNew[0].brand || 'PIX'})`);
-    }
-
-    knownOrderIds = new Set(newTxList.map(t => t.id || t.transaction_id));
-  }
-
-  function showToastNotification(msg) {
-    const toast = document.createElement('div');
-    toast.style.position = 'fixed';
-    toast.style.top = '20px';
-    toast.style.right = '20px';
-    toast.style.zIndex = '999999';
-    toast.style.background = '#10b981';
-    toast.style.color = '#ffffff';
-    toast.style.padding = '14px 22px';
-    toast.style.borderRadius = '12px';
-    toast.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
-    toast.style.fontWeight = 'bold';
-    toast.style.fontSize = '14px';
-    toast.style.display = 'flex';
-    toast.style.alignItems = 'center';
-    toast.style.gap = '10px';
-    toast.innerHTML = `<i class="fa-solid fa-bell"></i> <span>${msg}</span>`;
-
-    document.body.appendChild(toast);
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(-10px)';
-      setTimeout(() => toast.remove(), 300);
-    }, 4500);
-  }
-
-  let cachedStats = {};
-  let cachedTraffic = {};
-  let cachedFunnelStats = null; // dados persistidos do servidor (nunca zera)
-
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('admin_token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-  };
-
   async function loadData() {
     try {
-      const headers = getAuthHeaders();
-      const results = await Promise.allSettled([
-        fetch('/api/stats', { headers }).then(r => {
-          if (r.status === 401) {
-            localStorage.removeItem('admin_token');
-            window.location.href = 'login.html';
-            return {};
-          }
-          return r.ok ? r.json() : {};
-        }),
-        fetch('/api/transactions', { headers }).then(r => r.ok ? r.json() : []),
-        fetch('/api/online-leads', { headers }).then(r => r.ok ? r.json() : []),
-        fetch('/api/analytics/traffic', { headers }).then(r => r.ok ? r.json() : {}),
-        fetch('/api/funnel-stats', { headers }).then(r => r.ok ? r.json() : null)  // dados persistidos
+      const [statsRes, txRes, onlineRes, trafficRes] = await Promise.all([
+        fetch('/api/stats'),
+        fetch('/api/transactions'),
+        fetch('/api/online-leads'),
+        fetch('/api/analytics/traffic')
       ]);
 
-      // Nunca sobrescreve dados válidos com vazios — mantém o último estado conhecido
-      const newStats = results[0].status === 'fulfilled' && results[0].value && Object.keys(results[0].value).length > 0 ? results[0].value : null;
-      if (newStats) cachedStats = newStats;
+      if (statsRes.status === 401 || txRes.status === 401) {
+        window.location.href = 'login.html';
+        return;
+      }
 
-      const newTx = results[1].status === 'fulfilled' && Array.isArray(results[1].value) ? results[1].value : null;
-      if (newTx !== null && (newTx.length > 0 || transactions.length === 0)) transactions = newTx;
+      const stats = await statsRes.json();
+      transactions = await txRes.json();
+      onlineLeads = await onlineRes.json();
+      const traffic = await trafficRes.json();
 
-      const newLeads = results[2].status === 'fulfilled' && Array.isArray(results[2].value) ? results[2].value : null;
-      if (newLeads !== null) onlineLeads = newLeads; // leads online sempre atualizados (podem ser [] legitimamente)
-
-      const newTraffic = results[3].status === 'fulfilled' && results[3].value && Object.keys(results[3].value).length > 0 ? results[3].value : null;
-      if (newTraffic) cachedTraffic = newTraffic;
-
-      const funnelResult = results[4].status === 'fulfilled' ? results[4].value : null;
-      if (funnelResult) cachedFunnelStats = funnelResult;
-
-      checkNewOrdersNotification(transactions);
-
-      updateKPIs(cachedTraffic, cachedStats);
-      updateFunnels(onlineLeads, cachedStats, cachedTraffic, cachedFunnelStats);
+      updateKPIs(traffic, stats);
+      updateFunnels(onlineLeads, stats);
       updateSidebar();
       renderDashboardLists();
       renderPedidosList();
@@ -371,10 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       console.error('Erro ao carregar dados do Dashboard:', err);
-    } finally {
-      if (typeof loadingState !== 'undefined' && loadingState) {
-        loadingState.classList.add('hidden');
-      }
     }
   }
 
@@ -413,90 +292,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function updateFunnels(online, stats, traffic, funnelPersisted) {
-    // === FONTE PRIMARIA: dados persistidos do servidor (nunca zeram com cold start) ===
-    let totalVisits, totalCheckoutStarted, totalAddress, totalPayment, totalSuccess;
+  function updateFunnels(online, stats) {
+    // Stage counts from active online visitors + completed leads stats
+    const totalLeads = stats.totalAttempts || 0;
+    const pendingVal = stats.totalPixCopied || 0;
+    const approvedVal = stats.totalAprovados || 0;
+    const cardVal = stats.totalCardAttempts || 0;
 
-    if (funnelPersisted && funnelPersisted.today && funnelPersisted.today.visita > 0) {
-      // Usa os dados acumulados de hoje do arquivo persistido
-      const f = funnelPersisted.today;
-      totalVisits = f.visita || 1;
-      totalCheckoutStarted = f.visita || 0;  // todos que visitaram iniciaram o funil
-      totalAddress = (f.selecionou || 0) + (f.endereco || 0) + (f.pagamento || 0) + (f.obrigado || 0);
-      totalPayment = (f.pagamento || 0) + (f.obrigado || 0);
-      totalSuccess = (stats?.totalAprovados || 0) + (f.obrigado || 0);
+    funnelHome.textContent = totalLeads;
+    barFunnelHome.style.width = totalLeads > 0 ? '100%' : '0%';
 
-      // Adiciona os leads online atuais ao funil (complementa o arquivo)
-      online.forEach(lead => {
-        const stage = (lead.status_etapa || '').toLowerCase();
-        // Leads online já estão no arquivo, mas os muito recentes podem não estar
-        // Apenas incrementa se o session_id não estiver já contado (estimativa conservadora)
-      });
-    } else {
-      // === FALLBACK: calcula da memória (igual ao comportamento anterior) ===
-      totalVisits = Math.max(traffic?.totalVisitors || 0, online.length, stats?.totalAttempts || 0, 1);
+    funnelCheckout.textContent = pendingVal;
+    pctFunnelCheckout.textContent = `${pct(pendingVal, totalLeads)}%`;
+    barFunnelCheckout.style.width = `${pct(pendingVal, totalLeads)}%`;
 
-      let selectedVehicleCount = 0;
-      let addressCount = 0;
-      let paymentCount = 0;
+    funnelPayment.textContent = cardVal;
+    pctFunnelPayment.textContent = `${pct(cardVal, totalLeads)}%`;
+    barFunnelPayment.style.width = `${pct(cardVal, totalLeads)}%`;
 
-      online.forEach(lead => {
-        const stage = (lead.status_etapa || '').toLowerCase();
-        if (stage.includes('selecionou') || stage.includes('iniciou')) selectedVehicleCount++;
-        else if (stage.includes('endereço') || stage.includes('identificação') || stage.includes('checkout')) addressCount++;
-        else if (stage.includes('pagamento') || stage.includes('pix')) paymentCount++;
-        else if (stage.includes('obrigado')) { /* já conta nos aprovados */ }
-      });
-
-      totalCheckoutStarted = Math.max(selectedVehicleCount + addressCount + paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
-      totalAddress = Math.max(addressCount + paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
-      totalPayment = Math.max(paymentCount + (stats?.totalAttempts || 0), stats?.totalAttempts || 0);
-      totalSuccess = stats?.totalAprovados || 0;
-    }
-
-    // Taxa de abandono no checkout
-    const abandonedCount = Math.max(0, totalCheckoutStarted - totalSuccess);
-    const abandonRate = totalCheckoutStarted > 0 ? Math.round((abandonedCount / totalCheckoutStarted) * 100) : 0;
-
-    if (document.getElementById('kpi-abandono-checkout')) {
-      document.getElementById('kpi-abandono-checkout').textContent = `${abandonRate}% (${abandonedCount} abandonos)`;
-    }
-
-    if (funnelHome) {
-      funnelHome.textContent = totalVisits;
-      if (barFunnelHome) barFunnelHome.style.width = '100%';
-    }
-
-    if (document.getElementById('funnel-selected')) {
-      document.getElementById('funnel-selected').textContent = totalCheckoutStarted;
-      const pctSelected = pct(totalCheckoutStarted, totalVisits);
-      if (document.getElementById('pct-funnel-selected')) document.getElementById('pct-funnel-selected').textContent = `${pctSelected}%`;
-      if (document.getElementById('bar-funnel-selected')) document.getElementById('bar-funnel-selected').style.width = `${pctSelected}%`;
-    }
-
-    if (funnelCheckout) {
-      funnelCheckout.textContent = totalAddress;
-      const pctAddr = pct(totalAddress, totalVisits);
-      if (pctFunnelCheckout) pctFunnelCheckout.textContent = `${pctAddr}%`;
-      if (barFunnelCheckout) barFunnelCheckout.style.width = `${pctAddr}%`;
-    }
-
-    if (funnelPayment) {
-      funnelPayment.textContent = totalPayment;
-      const pctPay = pct(totalPayment, totalVisits);
-      if (pctFunnelPayment) pctFunnelPayment.textContent = `${pctPay}%`;
-      if (barFunnelPayment) barFunnelPayment.style.width = `${pctPay}%`;
-    }
-
-    if (funnelSuccess) {
-      funnelSuccess.textContent = totalSuccess;
-      const pctSucc = pct(totalSuccess, totalVisits);
-      if (pctFunnelSuccess) pctFunnelSuccess.textContent = `${pctSucc}%`;
-      if (barFunnelSuccess) barFunnelSuccess.style.width = `${pctSucc}%`;
-    }
+    funnelSuccess.textContent = approvedVal;
+    pctFunnelSuccess.textContent = `${pct(approvedVal, totalLeads)}%`;
+    barFunnelSuccess.style.width = `${pct(approvedVal, totalLeads)}%`;
 
     if (document.getElementById('dash-funil-total-label')) {
-      document.getElementById('dash-funil-total-label').textContent = `total ${totalVisits} acessos`;
+      document.getElementById('dash-funil-total-label').textContent = `total ${totalLeads}`;
     }
   }
 
@@ -568,15 +387,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // 2. Real-time Map (Leaflet)
   // ===========================================================
   function initLiveMap() {
-    if (liveMap) return; // Already loaded
+    if (liveMap) return;
 
     // Center on Brazil region
-    liveMap = L.map('live-map').setView([-14.235, -51.9253], 4);
+    liveMap = L.map('live-map', { zoomControl: true }).setView([-14.235, -51.9253], 4);
     
-    // Choose tile styling according to body theme (dark/light filter)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // CartoDB Dark Matter Tiles (Vetor Dark de altíssima qualidade)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 18,
-      attribution: '© OpenStreetMap contributors'
+      subdomains: 'abcd',
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap'
     }).addTo(liveMap);
 
     updateMapMarkers();
@@ -589,26 +409,31 @@ document.addEventListener('DOMContentLoaded', () => {
     mapMarkers.forEach(m => liveMap.removeLayer(m));
     mapMarkers = [];
 
-    // Map Brazil state/city offsets to mock random coordinates if geo is local fallback
     const stateCoords = {
       'São Paulo': [-23.5505, -46.6333],
+      'SP': [-23.5505, -46.6333],
       'Rio de Janeiro': [-22.9068, -43.1729],
+      'RJ': [-22.9068, -43.1729],
       'Minas Gerais': [-19.9167, -43.9345],
+      'MG': [-19.9167, -43.9345],
       'Rio Grande do Sul': [-30.0346, -51.2177],
+      'RS': [-30.0346, -51.2177],
       'Paraná': [-25.4284, -49.2733],
+      'PR': [-25.4284, -49.2733],
       'Santa Catarina': [-27.5954, -48.5480],
-      'Bahia': [-12.9704, -38.5124]
+      'SC': [-27.5954, -48.5480],
+      'Bahia': [-12.9704, -38.5124],
+      'BA': [-12.9704, -38.5124]
     };
 
     onlineLeads.forEach(lead => {
       let lat = -23.5505;
       let lng = -46.6333;
 
-      // Add a slight random jitter so markers do not overlay directly on top of each other
-      const jitterLat = (Math.random() - 0.5) * 1.5;
-      const jitterLng = (Math.random() - 0.5) * 1.5;
+      const jitterLat = (Math.random() - 0.5) * 1.2;
+      const jitterLng = (Math.random() - 0.5) * 1.2;
 
-      const stateName = lead.estado || 'São Paulo';
+      const stateName = lead.estado || 'SP';
       if (stateCoords[stateName]) {
         lat = stateCoords[stateName][0] + jitterLat;
         lng = stateCoords[stateName][1] + jitterLng;
@@ -617,24 +442,26 @@ document.addEventListener('DOMContentLoaded', () => {
         lng = lng + jitterLng;
       }
 
-      const name = lead.nome || 'Visitante';
+      const name = lead.nome || lead.session_id || 'Visitante';
       const stage = lead.status_etapa || 'Loja';
-      const dev = lead.dispositivo || 'Mobile';
+      const dev = lead.dispositivo || 'Desktop';
+      const car = lead.modelo_carro || 'Carro';
 
       const popupContent = `
-        <div style="font-family:'Outfit'; font-size:12px;">
-          <strong style="color:var(--primary); font-size:13px;">${name}</strong><br>
-          <b>Etapa:</b> ${stage}<br>
-          <b>Aparelho:</b> ${dev}<br>
-          <b>Local:</b> ${lead.cidade || 'Simulado'}, ${lead.estado || 'SP'}
+        <div style="font-family:'Outfit', sans-serif; font-size:12px; line-height:1.5;">
+          <strong style="color:#a855f7; font-size:13px;">${name}</strong><br>
+          <span style="color:#38bdf8; font-weight:700;">${stage}</span> • ${car}<br>
+          <span style="color:#9ca3af;">Aparelho: ${dev}</span><br>
+          <span style="color:#34d399; font-weight:600;">📍 ${lead.cidade || 'São Paulo'}, ${lead.estado || 'SP'}</span>
         </div>
       `;
 
-      // Custom pulsing green icon for active users
+      // Pulsing neon DivIcon
       const customIcon = L.divIcon({
-        className: 'map-pulse-marker',
-        html: '<div style="width:12px; height:12px; background:#10b981; border-radius:50%; border:2px solid #fff; box-shadow:0 0 10px #10b981;"></div>',
-        iconSize: [12, 12]
+        className: 'map-pulse-wrapper',
+        html: '<div class="map-ping-container"><div class="map-ping-ring"></div><div class="map-ping-dot"></div></div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
       });
 
       const marker = L.marker([lat, lng], { icon: customIcon })
@@ -643,6 +470,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       mapMarkers.push(marker);
     });
+
+    // Update map side stats panel if elements exist
+    if (document.getElementById('map-count-total')) {
+      document.getElementById('map-count-total').textContent = onlineLeads.length;
+    }
   }
 
   // ===========================================================
@@ -1197,7 +1029,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div class="pedido-header-right">
             <span class="price-text">${currency(tx.amount)}</span>
-            ${isPending ? `<button class="btn-mark-pay" data-id="${tx.id}"><i class="fa-solid fa-check"></i> Marcar Pago</button>` : ''}
+            ${isPix && isPending ? `<button class="btn-mark-pay" data-id="${tx.id}"><i class="fa-solid fa-check"></i> Marcar Pago</button>` : ''}
             <button class="btn-delete-pedido" data-id="${tx.id}" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>
           </div>
         </div>
@@ -1206,7 +1038,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <h4>CLIENTE</h4>
             <p><strong>${tx.client.name}</strong></p>
             <p>${tx.client.email}</p>
-            <p>CPF: ${tx.client.cpf} · Tel: ${tx.client.phone} · <strong style="color:#0284c7;">🌐 IP: ${tx.ip || '127.0.0.1'}</strong></p>
+            <p>CPF: ${tx.client.cpf} · Tel: ${tx.client.phone}</p>
           </div>
           <div class="detail-block">
             <h4>ENDEREÇO</h4>
@@ -1226,17 +1058,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const markPayBtn = el.querySelector('.btn-mark-pay');
       if (markPayBtn) {
         markPayBtn.addEventListener('click', async () => {
-          if (!confirm(`Marcar o pedido de "${tx.client.name}" (ID: ${tx.id}) como PAGO?`)) return;
+          if (!confirm('Marcar este pedido como PAGO no Supabase?')) return;
           try {
-            const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
-            const res = await fetch(`/api/transactions/${tx.id}/pay`, { method: 'PATCH', headers });
+            const res = await fetch(`/api/transactions/${tx.id}/pay`, { method: 'PATCH' });
             if (res.status === 403) return alert('Apenas administradores/gerentes podem alterar pagamentos.');
             const data = await res.json();
-            if (data.success) {
-              loadData();
-            } else {
-              alert(data.error || 'Erro ao alterar status.');
-            }
+            if (data.success) loadData();
           } catch (err) {
             console.error(err);
           }
@@ -1336,7 +1163,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <h4>CLIENTE</h4>
                 <p><strong>${tx.client.name}</strong></p>
                 <p>${tx.client.email}</p>
-                <p>CPF: ${tx.client.cpf} · ${tx.client.phone} · <strong style="color:#0284c7;">🌐 IP: ${tx.ip || '127.0.0.1'}</strong></p>
+                <p>CPF: ${tx.client.cpf} · ${tx.client.phone}</p>
               </div>
               <div class="detail-block">
                 <h4>ENDEREÇO</h4>
@@ -1397,14 +1224,11 @@ document.addEventListener('DOMContentLoaded', () => {
           const isMobile = lead.dispositivo === 'Mobile';
           const devIcon = isMobile ? '📱' : '💻';
           
-          const leadIp = lead.ip || lead.client_ip || '127.0.0.1';
-          const locationStr = lead.cidade ? `${lead.cidade}/${lead.estado || ''} · ` : '';
-
           li.innerHTML = `
             <span class="activity-icon">${devIcon}</span>
             <div class="activity-info">
               <p><strong>${lead.nome || 'Visitante Anônimo'}</strong> (${lead.email || 'Aguardando digitação'})</p>
-              <p class="activity-time">Etapa: <strong style="color:var(--primary);">${lead.status_etapa || 'Loja'}</strong> · 🌐 <strong style="color:#0284c7;">IP: ${leadIp}</strong> · ${locationStr}URL: ${lead.url_atual}</p>
+              <p class="activity-time">Etapa: <strong style="color:var(--primary);">${lead.status_etapa || 'Loja'}</strong> · IP: ${lead.session_id.substring(5, 14)} · URL: ${lead.url_atual}</p>
             </div>
             <span class="activity-amount" style="font-size:11px; color:var(--success); font-weight:700;">Ativo</span>
           `;
@@ -1453,8 +1277,8 @@ document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
   loadData();
 
-  // Real-time polling updates every 2 seconds
+  // Polling updates every 8 seconds
   setInterval(() => {
     loadData();
-  }, 2000);
+  }, 8000);
 });

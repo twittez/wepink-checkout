@@ -211,8 +211,9 @@
   </style>
 </head>
 <body>
-  <div class="login-container">
-    <div class="login-card">
+  <canvas id="globe-canvas" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; pointer-events:none; opacity:0.75;"></canvas>
+  <div class="login-container" style="position:relative; z-index:10;">
+    <div class="login-card" style="background: rgba(10, 10, 15, 0.85); backdrop-filter: blur(16px);">
       <div class="login-header">
         <div class="logo">
           <span class="logo-w">t</span><span>witteZ</span>
@@ -291,7 +292,6 @@
 
           const data = await res.json();
           if (res.ok && data.success) {
-            localStorage.setItem('admin_token', 'twittez_logged_in');
             window.location.href = 'index.html';
           } else {
             errorText.textContent = data.message || 'Usuário ou senha incorretos.';
@@ -307,6 +307,117 @@
         }
       });
     });
+
+    // 3D Holographic Globe Background Render
+    (function initGlobe() {
+      const canvas = document.getElementById('globe-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let width = (canvas.width = window.innerWidth);
+      let height = (canvas.height = window.innerHeight);
+
+      window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+
+      const radius = Math.min(width, height) * 0.3;
+      const dots = [];
+      for (let i = 0; i < 550; i++) {
+        const theta = Math.acos(2 * Math.random() - 1);
+        const phi = 2 * Math.PI * Math.random();
+        dots.push({
+          baseX: radius * Math.sin(theta) * Math.cos(phi),
+          baseY: radius * Math.sin(theta) * Math.sin(phi),
+          baseZ: radius * Math.cos(theta),
+        });
+      }
+
+      const rays = [
+        { tilt: -0.3, speed: 0.008, radius: radius * 1.3, color: '#38bdf8' },
+        { tilt: 0.45, speed: -0.006, radius: radius * 1.45, color: '#a855f7' },
+        { tilt: 0.15, speed: 0.012, radius: radius * 1.6, color: '#ec4899' },
+      ];
+
+      let rotationY = 0;
+      let rotationX = 0.2;
+
+      function render() {
+        ctx.clearRect(0, 0, width, height);
+        const centerX = width * 0.5;
+        const centerY = height * 0.48;
+
+        rotationY += 0.004;
+
+        const gradient = ctx.createRadialGradient(centerX, centerY, 20, centerX, centerY, radius * 1.9);
+        gradient.addColorStop(0, 'rgba(56, 189, 248, 0.18)');
+        gradient.addColorStop(0.4, 'rgba(168, 85, 247, 0.08)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        rays.forEach((ray, idx) => {
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(ray.tilt);
+
+          ctx.beginPath();
+          ctx.ellipse(0, 0, ray.radius, ray.radius * 0.32, rotationY * (idx % 2 === 0 ? 0.3 : -0.3), 0, Math.PI * 2);
+          ctx.strokeStyle = `${ray.color}44`;
+          ctx.lineWidth = 1.8;
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = ray.color;
+          ctx.stroke();
+
+          const beamAngle = rotationY * (ray.speed * 250) + idx * 2.1;
+          const bx = Math.cos(beamAngle) * ray.radius;
+          const by = Math.sin(beamAngle) * (ray.radius * 0.32);
+
+          ctx.beginPath();
+          ctx.arc(bx, by, 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = ray.color;
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = ray.color;
+          ctx.fill();
+
+          ctx.restore();
+        });
+
+        const cosY = Math.cos(rotationY);
+        const sinY = Math.sin(rotationY);
+        const cosX = Math.cos(rotationX);
+        const sinX = Math.sin(rotationX);
+
+        dots.forEach((dot) => {
+          let x1 = dot.baseX * cosY - dot.baseZ * sinY;
+          let z1 = dot.baseX * sinY + dot.baseZ * cosY;
+          let y1 = dot.baseY;
+
+          let y2 = y1 * cosX - z1 * sinX;
+          let z2 = y1 * sinX + z1 * cosX;
+          let x2 = x1;
+
+          const fov = 650;
+          const scale = fov / (fov + z2);
+          const px = centerX + x2 * scale;
+          const py = centerY + y2 * scale;
+          const alpha = Math.max(0.12, (z2 + radius) / (2 * radius));
+
+          ctx.beginPath();
+          ctx.arc(px, py, scale * 1.7, 0, Math.PI * 2);
+          ctx.fillStyle = z2 > 0 ? `rgba(168, 85, 247, ${alpha * 0.9})` : `rgba(56, 189, 248, ${alpha * 0.55})`;
+          if (z2 > 0) {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#a855f7';
+          }
+          ctx.fill();
+        });
+
+        requestAnimationFrame(render);
+      }
+
+      render();
+    })();
   </script>
 </body>
 </html>
