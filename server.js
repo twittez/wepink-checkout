@@ -612,6 +612,31 @@ app.post('/api/admin/transactions/update-status', checkAdminAuth, async (req, re
   }
 });
 
+app.post('/api/admin/transactions/cleanup-unipay', checkAdminAuth, async (req, res) => {
+  try {
+    let deletedCount = 0;
+    if (supabase) {
+      const { count } = await supabase.from('leads').delete({ count: 'exact' }).or('nome.ilike.%UNIPAY%,transaction_id.ilike.%CP-UNIPAY%');
+      await supabase.from('events').delete().or('description.ilike.%UNIPAY%,session_id.ilike.%CP-UNIPAY%');
+      await supabase.from('online_leads').delete().or('nome.ilike.%UNIPAY%,session_id.ilike.%CP-UNIPAY%');
+      deletedCount = count || 0;
+    }
+
+    const list = readLocalTransactions();
+    const filtered = list.filter(t => {
+      const name = (t.client?.name || t.nome || '').toUpperCase();
+      const id = String(t.id || t.transaction_id || '');
+      return !name.includes('UNIPAY') && !id.includes('CP-UNIPAY');
+    });
+    deletedCount += (list.length - filtered.length);
+    writeLocalTransactions(filtered);
+
+    return res.json({ success: true, deletedCount, message: `Removidos ${deletedCount} pedidos da UNIPAY` });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Checkout Endpoints (PIX & Credit Card) - Re-ativados com Deduplicação por transaction_id
 async function saveOrderLead(leadData) {
   // Salva no JSON local SEMPRE para que apareça no painel admin independente de conexões externas
