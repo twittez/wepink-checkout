@@ -62,6 +62,17 @@ if (supabase) {
 const adminUser = process.env.ADMIN_USER || 'twittez';
 const adminPassword = process.env.ADMIN_PASSWORD || 'Twittez@2003';
 
+// In-Memory store para visitantes online (com expiração de 35s)
+const onlineLeadsMap = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, lead] of onlineLeadsMap.entries()) {
+    if (now - lead.last_seen_ms > 35000) {
+      onlineLeadsMap.delete(sessionId);
+    }
+  }
+}, 5000);
+
 const cookieOptions = {
   signed: true,
   httpOnly: true,
@@ -409,6 +420,103 @@ app.get('/api/analytics/finance', checkAdminAuth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Online Leads & Heartbeat Endpoints
+app.post('/api/online-leads', (req, res) => {
+  const body = req.body || {};
+  const sessionId = body.session_id || `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const nowMs = Date.now();
+
+  const leadData = {
+    session_id: sessionId,
+    status_etapa: body.status_etapa || body.stage || 'Loja',
+    modelo_carro: body.modelo_carro || body.vehicle || null,
+    nome: body.nome || null,
+    email: body.email || null,
+    url_atual: body.url_atual || '',
+    dispositivo: body.dispositivo || 'Desktop',
+    navegador: body.navegador || 'Chrome',
+    origem_trafego: body.origem_trafego || 'Direto',
+    utm_source: body.utm_source || null,
+    utm_medium: body.utm_medium || null,
+    utm_campaign: body.utm_campaign || null,
+    cidade: body.cidade || 'São Paulo',
+    estado: body.estado || 'SP',
+    last_seen: new Date().toISOString(),
+    last_seen_ms: nowMs
+  };
+
+  onlineLeadsMap.set(sessionId, leadData);
+
+  if (supabase) {
+    supabase.from('online_leads').upsert([{
+      session_id: sessionId,
+      last_seen: new Date().toISOString(),
+      status_etapa: leadData.status_etapa,
+      modelo_carro: leadData.modelo_carro,
+      nome: leadData.nome,
+      email: leadData.email,
+      url_atual: leadData.url_atual,
+      dispositivo: leadData.dispositivo,
+      navegador: leadData.navegador,
+      origem_trafego: leadData.origem_trafego,
+      utm_source: leadData.utm_source,
+      utm_medium: leadData.utm_medium,
+      utm_campaign: leadData.utm_campaign,
+    }], { onConflict: 'session_id' }).then().catch(() => {});
+  }
+
+  res.json({ success: true, activeCount: onlineLeadsMap.size });
+});
+
+app.get('/api/online-leads', checkAdminAuth, async (req, res) => {
+  const now = Date.now();
+  const activeMemoryLeads = [];
+  for (const lead of onlineLeadsMap.values()) {
+    if (now - lead.last_seen_ms <= 35000) {
+      activeMemoryLeads.push(lead);
+    }
+  }
+
+  if (supabase) {
+    try {
+      const thirtyFiveSecsAgo = new Date(Date.now() - 35000).toISOString();
+      const { data } = await supabase.from('online_leads').select('*').gte('last_seen', thirtyFiveSecsAgo);
+      if (Array.isArray(data) && data.length > 0) {
+        const map = new Map();
+        activeMemoryLeads.forEach(l => map.set(l.session_id, l));
+        data.forEach(l => map.set(l.session_id, l));
+        return res.json(Array.from(map.values()));
+      }
+    } catch (e) {}
+  }
+
+  return res.json(activeMemoryLeads);
+});
+
+app.get('/api/stats', checkAdminAuth, async (req, res) => {
+  try {
+    const transactions = await getTransactionsList();
+    const paid = transactions.filter(t => t.status === 'PAGO');
+    const pending = transactions.filter(t => t.status === 'PENDENTE');
+    const declined = transactions.filter(t => t.status === 'NEGADO');
+    const totalReceita = paid.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const totalAguardando = pending.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+    res.json({
+      totalAttempts: transactions.length,
+      todayAttempts: transactions.length,
+      totalAprovados: paid.length,
+      totalReceita,
+      totalAguardandoPagamento: totalAguardando,
+      totalPixCopied: pending.length,
+      totalCardAttempts: declined.length + paid.filter(t => t.brand !== 'PIX').length,
+      totalAttemptedValue: transactions.reduce((sum, t) => sum + (t.amount || 0), 0),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
